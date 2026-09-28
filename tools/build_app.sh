@@ -19,7 +19,7 @@ pyinstaller --windowed --name TeacherConsole \
   --paths "$ROOT" \
   --hidden-import aiohttp --hidden-import zeroconf \
   --collect-submodules common --collect-submodules teacher --collect-submodules agent \
-  --add-data "teacher/static:teacher/static" \
+  --add-data "$ROOT/teacher/static:teacher/static" \
   deploy/teacher_entry.py \
   --distpath "$DIST" --workpath "$BUILD/work" --specpath "$BUILD"
 
