@@ -1,0 +1,85 @@
+name: Build ACOS macOS artifacts
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller aiohttp zeroconf pillow
+
+      - name: Make scripts executable
+        run: |
+          chmod +x tools/build_app.sh
+          chmod +x deploy/build_pkg.sh
+          chmod +x deploy/INSTALL.command
+          chmod +x deploy/UNINSTALL.command
+          chmod +x deploy/EMERGENCY_RESET.command
+
+      - name: Build StudentAgent.pkg
+        run: |
+          ./deploy/build_pkg.sh
+
+      - name: Preserve StudentAgent.pkg
+        run: |
+          cp dist/StudentAgent.pkg /tmp/StudentAgent.pkg
+
+      - name: Build TeacherConsole.app
+        run: |
+          ./tools/build_app.sh
+
+      - name: Restore StudentAgent.pkg
+        run: |
+          cp /tmp/StudentAgent.pkg dist/StudentAgent.pkg
+
+      - name: Ad-hoc sign TeacherConsole
+        run: |
+          codesign --deep --force --sign - dist/TeacherConsole.app
+
+      - name: Assemble USB deployment folder
+        run: |
+          rm -rf ACOS_USB
+          mkdir -p ACOS_USB
+          cp -R dist/TeacherConsole.app ACOS_USB/
+          cp dist/StudentAgent.pkg ACOS_USB/
+          cp deploy/INSTALL.command ACOS_USB/
+          cp deploy/UNINSTALL.command ACOS_USB/
+          cp deploy/EMERGENCY_RESET.command ACOS_USB/
+          chmod +x ACOS_USB/*.command
+          cp README.md ACOS_USB/README.md
+          ditto -c -k --sequesterRsrc --keepParent ACOS_USB ACOS_USB.zip
+
+      - name: Verify required outputs
+        run: |
+          test -d dist/TeacherConsole.app
+          test -f dist/StudentAgent.pkg
+          test -f ACOS_USB.zip
+          ls -lah dist
+          ls -lah ACOS_USB
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ACOS-macOS-USB-build
+          path: |
+            ACOS_USB.zip
+            dist/TeacherConsole.app
+            dist/StudentAgent.pkg
+          if-no-files-found: error
+          retention-days: 7
