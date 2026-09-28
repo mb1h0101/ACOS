@@ -26,6 +26,7 @@ import json
 import os
 import sys
 import time
+import socket
 from typing import Dict, List, Optional
 
 # allow running as `python teacher/server.py` from repo root
@@ -90,6 +91,139 @@ class Console:
         self.milestones_fired = set()
         self.broadcast_task: Optional[asyncio.Task] = None
         self.broadcast_targets = "all"
+        self.individual_reward_tasks: Dict[str, asyncio.Task] = {}
+        self.lesson_path = os.path.expanduser("~/ACOS/lesson.json")
+        self.lesson = self._load_lesson()
+        self.lesson_progress: Dict[str, dict] = {}
+
+    # ---- lesson / adaptive reward -----------------------------------------
+    def _load_lesson(self) -> dict:
+        default = {
+            "enabled": False,
+            "title": "Today's lesson",
+            "questions": [],
+            "min_accuracy": 80,
+            "reward_seconds": 300,
+        }
+        try:
+            if os.path.exists(self.lesson_path):
+                with open(self.lesson_path, "r", encoding="utf-8") as f:
+                    d = json.load(f)
+                default.update(d if isinstance(d, dict) else {})
+        except Exception:
+            pass
+        return default
+
+    def save_lesson(self):
+        os.makedirs(os.path.dirname(self.lesson_path), exist_ok=True)
+        with open(self.lesson_path, "w", encoding="utf-8") as f:
+            json.dump(self.lesson, f, ensure_ascii=False, indent=2)
+
+    def lesson_public(self) -> dict:
+        return {
+            "enabled": bool(self.lesson.get("enabled")),
+            "title": self.lesson.get("title") or "Today's lesson",
+            "min_accuracy": int(self.lesson.get("min_accuracy", 80)),
+            "reward_seconds": int(self.lesson.get("reward_seconds", 300)),
+            "questions": [
+                {"id": q.get("id"), "prompt": q.get("prompt", "")}
+                for q in self.lesson.get("questions", [])
+            ],
+        }
+
+    def agent_for_ip(self, ip: str) -> Optional[AgentConn]:
+        candidates = [a for a in self.agents.values() if a.ip == ip and a.online]
+        return candidates[-1] if candidates else None
+
+    @staticmethod
+    def _norm_answer(value: str) -> str:
+        return " ".join(str(value or "").strip().casefold().split())
+
+    async def lesson_answer(self, agent: AgentConn, task_id: str, answer: str) -> dict:
+        questions = {str(q.get("id")): q for q in self.lesson.get("questions", [])}
+        q = questions.get(str(task_id))
+        if not q:
+            return {"ok": False, "error": "unknown task"}
+        sid = agent.session_id or agent.agent_id
+        prog = self.lesson_progress.setdefault(sid, {
+            "started": {}, "attempts": {}, "correct": set(), "first_correct": {},
+            "rewarded": False,
+        })
+        now_ms = int(time.time() * 1000)
+        if task_id not in prog["started"]:
+            prog["started"][task_id] = now_ms
+            self.analytics.record(sid, EV.TASK_START, {"task_id": task_id})
+
+        n = int(prog["attempts"].get(task_id, 0)) + 1
+        prog["attempts"][task_id] = n
+        accepted = [self._norm_answer(x) for x in str(q.get("answer", "")).split("|") if x.strip()]
+        correct = self._norm_answer(answer) in accepted if accepted else False
+
+        if n == 1:
+            prog["first_correct"][task_id] = bool(correct)
+            self.analytics.record(sid, EV.FIRST_ATTEMPT_ACCURACY,
+                                  {"task_id": task_id, "correct": bool(correct)})
+        else:
+            self.analytics.record(sid, EV.RETRY, {"task_id": task_id, "n": n})
+
+        if correct and task_id not in prog["correct"]:
+            prog["correct"].add(task_id)
+            elapsed = max(0, now_ms - int(prog["started"].get(task_id, now_ms)))
+            self.analytics.record(sid, EV.TIME_ON_TASK, {"task_id": task_id, "ms": elapsed})
+            self.analytics.record(sid, EV.TASK_END, {"task_id": task_id})
+            self.analytics.record(sid, EV.TASK_COMPLETION, {"task_id": task_id, "completed": True})
+
+        total = len(questions)
+        completed = len(prog["correct"])
+        first_total = len(prog["first_correct"])
+        first_ok = sum(1 for v in prog["first_correct"].values() if v)
+        accuracy = round(100 * first_ok / first_total, 1) if first_total else 0.0
+        threshold = int(self.lesson.get("min_accuracy", 80))
+        qualified = total > 0 and completed >= total and accuracy >= threshold
+
+        if qualified and not prog["rewarded"]:
+            prog["rewarded"] = True
+            await self._start_individual_reward(agent, int(self.lesson.get("reward_seconds", 300)))
+
+        return {
+            "ok": True, "correct": bool(correct), "attempt": n,
+            "completed": completed, "total": total,
+            "first_attempt_accuracy": accuracy,
+            "qualified_for_reward": bool(qualified),
+        }
+
+    async def _start_individual_reward(self, a: AgentConn, seconds: int):
+        old = self.individual_reward_tasks.pop(a.agent_id, None)
+        if old and not old.done():
+            old.cancel()
+        cmd_id = P.uuid.uuid4().hex[:12]
+        pol = self.policies.get(P.MODE_REWARD, Policy(mode=P.MODE_REWARD)).to_dict()
+        a.pending[cmd_id] = {"ts": time.time(), "cmd": "set_mode"}
+        await self.send_agent(a, P.msg(P.T_SET_MODE, cmd_id=cmd_id,
+                                       mode=P.MODE_REWARD, policy=pol))
+        a.mode = P.MODE_REWARD
+        self.analytics.record(a.session_id or a.agent_id, EV.REWARD_START,
+                              {"seconds": seconds, "reason": "lesson_rule"})
+
+        async def _run():
+            try:
+                await asyncio.sleep(max(1, seconds))
+                cmd = P.uuid.uuid4().hex[:12]
+                pol2 = self.policies.get(P.MODE_EXERCISE, Policy(mode=P.MODE_EXERCISE)).to_dict()
+                a.pending[cmd] = {"ts": time.time(), "cmd": "set_mode"}
+                await self.send_agent(a, P.msg(P.T_SET_MODE, cmd_id=cmd,
+                                               mode=P.MODE_EXERCISE, policy=pol2))
+                a.mode = P.MODE_EXERCISE
+                self.analytics.record(a.session_id or a.agent_id, EV.REWARD_END,
+                                      {"reason": "timeout"})
+                await self.push_state()
+            except asyncio.CancelledError:
+                pass
+            finally:
+                self.individual_reward_tasks.pop(a.agent_id, None)
+
+        self.individual_reward_tasks[a.agent_id] = asyncio.create_task(_run())
+        await self.push_state()
 
     # ---- console UI push --------------------------------------------------
     async def push_console(self, obj: dict):
@@ -281,6 +415,17 @@ class Console:
                 await self.push_console({"type": "milestone", "pct": thresh})
 
 
+def _local_ip() -> str:
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.connect(("8.8.8.8", 80))
+        ip = sock.getsockname()[0]
+        sock.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+
 # ---------------------------------------------------------------------------
 # HTTP / WS handlers
 # ---------------------------------------------------------------------------
@@ -407,6 +552,7 @@ def make_app(console: Console) -> web.Application:
 
     # ---- REST API ---------------------------------------------------------
     async def api_state(request):
+        port = request.app.get("acos_port", 8770)
         return web.json_response({
             "class_mode": console.class_mode,
             "reward_remaining": max(0, int(console.reward_ends_at - time.time())) if console.reward_ends_at else 0,
@@ -414,7 +560,52 @@ def make_app(console: Console) -> web.Application:
             "policies": {k: v.to_dict() for k, v in console.policies.items()},
             "online": sum(1 for a in console.agents.values() if a.online),
             "total": len(console.agents),
+            "lesson": console.lesson,
+            "lesson_url": f"http://{_local_ip()}:{port}/lesson",
         })
+
+    async def lesson_page(request):
+        return web.FileResponse(os.path.join(STATIC_DIR, "lesson.html"))
+
+    async def api_lesson_get(request):
+        return web.json_response(console.lesson_public())
+
+    async def api_lesson_save(request):
+        body = await request.json()
+        qs = []
+        for i, q in enumerate(body.get("questions", []), start=1):
+            prompt = str(q.get("prompt", "")).strip()
+            answer = str(q.get("answer", "")).strip()
+            if prompt and answer:
+                qs.append({"id": str(q.get("id") or f"q{i}"),
+                           "prompt": prompt, "answer": answer})
+        console.lesson = {
+            "enabled": bool(body.get("enabled", True)),
+            "title": str(body.get("title") or "Today's lesson").strip(),
+            "questions": qs,
+            "min_accuracy": max(0, min(100, int(body.get("min_accuracy", 80)))),
+            "reward_seconds": max(10, min(3600, int(body.get("reward_seconds", 300)))),
+        }
+        console.lesson_progress.clear()
+        console.save_lesson()
+        ip = _local_ip()
+        pol = console.policies.get(P.MODE_EXERCISE, Policy(mode=P.MODE_EXERCISE))
+        for host in (ip, "localhost", "127.0.0.1"):
+            if host not in pol.site_allow:
+                pol.site_allow.append(host)
+        console.policies[P.MODE_EXERCISE] = pol
+        await console.cmd_set_policy(P.MODE_EXERCISE, pol.to_dict())
+        return web.json_response({"ok": True, "lesson": console.lesson,
+                                  "lesson_url": f"http://{ip}:{request.app.get('acos_port', 8770)}/lesson"})
+
+    async def api_lesson_answer(request):
+        agent = console.agent_for_ip(request.remote or "")
+        if not agent:
+            return web.json_response({"ok": False, "error": "No online Student Agent matched this Mac. Start StudentAgent first."}, status=409)
+        body = await request.json()
+        result = await console.lesson_answer(agent, str(body.get("task_id", "")),
+                                             str(body.get("answer", "")))
+        return web.json_response(result, status=200 if result.get("ok") else 400)
 
     async def api_command(request):
         body = await request.json()
@@ -461,6 +652,10 @@ def make_app(console: Console) -> web.Application:
                             headers={"Content-Disposition": "attachment; filename=acos_events.csv"})
 
     app.router.add_get("/", index)
+    app.router.add_get("/lesson", lesson_page)
+    app.router.add_get("/api/lesson", api_lesson_get)
+    app.router.add_post("/api/lesson", api_lesson_save)
+    app.router.add_post("/api/lesson/answer", api_lesson_answer)
     app.router.add_get("/ws/agent", ws_agent)
     app.router.add_get("/ws/console", ws_console)
     app.router.add_get("/api/state", api_state)
@@ -501,6 +696,7 @@ def main():
     analytics = Analytics(args.db)
     console = Console(analytics)
     app = make_app(console)
+    app["acos_port"] = args.port
 
     async def on_start(app):
         app["reaper"] = asyncio.create_task(_offline_reaper(console))
