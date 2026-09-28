@@ -239,12 +239,29 @@ class Overlay:
                 return False
         return True
 
-    def blackout(self, message="Eyes on the teacher"):
-        self.state = "blackout"
+    def blackout(self, message="請看老師這裡"):
+        """
+        ATTENTION mode: a very visible top banner, not a full-screen lock.
+        Students can keep their current app/game state; the teacher can use
+        FOCUS NOW separately when interaction must actually be restricted.
+        """
+        self.state = "attention"
         if self._ensure():
             try:
-                self._label.configure(text=message, image="")
+                sw = self._root.winfo_screenwidth()
+                h = 150
+                self._root.attributes("-fullscreen", False)
+                self._root.geometry(f"{sw}x{h}+0+0")
+                self._root.configure(bg="#111111")
+                self._label.configure(
+                    text=f"👀  {message}",
+                    image="",
+                    bg="#111111",
+                    fg="white",
+                    font=("Helvetica", 42, "bold"),
+                )
                 self._root.deiconify()
+                self._root.lift()
                 self._root.update()
             except Exception:
                 pass
@@ -274,9 +291,20 @@ class Overlay:
             self._label.configure(text="[teacher screen]", image="")
 
     def kiosk(self, message="Focus"):
-        # For MVP the kiosk is a topmost fullscreen frame; a hardened build
-        # also sets the presentation options to hide Dock/menu bar.
-        self.blackout(message)
+        # Strong FOCUS mode remains full-screen and blocking; ATTENTION is only
+        # a non-blocking banner so teachers can choose the appropriate level.
+        self.state = "focus"
+        if self._ensure():
+            try:
+                self._root.attributes("-fullscreen", True)
+                self._root.configure(bg="black")
+                self._label.configure(text=message, image="", bg="black",
+                                      fg="white", font=("Helvetica", 48, "bold"))
+                self._root.deiconify()
+                self._root.lift()
+                self._root.update()
+            except Exception:
+                pass
 
     def hide(self):
         self.state = "hidden"
