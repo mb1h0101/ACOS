@@ -61,3 +61,11 @@ td:last-child{text-align:right;color:var(--muted)}
 .hidden{display:none}
 h4{margin:14px 0 6px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
 a.act{display:inline-block;text-decoration:none;margin-right:6px}
+
+input[type=text]{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:6px;font:inherit}
+.twocol{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.lessonurl{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;word-break:break-all}
+.lesson-card{max-width:760px;margin:40px auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px}
+.lesson-q{background:var(--tile);border:1px solid var(--line);border-radius:10px;padding:14px;margin:12px 0}
+.lesson-q input{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:9px;margin-top:8px}
+.lesson-result{font-size:12px;margin-top:8px}.lesson-result.good{color:var(--good)}.lesson-result.bad{color:var(--bad)}
