@@ -161,4 +161,48 @@ document.addEventListener('keydown',e=>{
   if(e.key==='6') $('#blackout').click();
 });
 
-connect(); loadPolicies();
+
+// ---- lesson / task builder -----------------------------------------------
+function parseLessonLines(text){
+  const out=[];
+  text.split(/\r?\n/).forEach((line,i)=>{
+    const parts=line.split('::');
+    if(parts.length<2) return;
+    const prompt=parts.shift().trim();
+    const answer=parts.join('::').trim();
+    if(prompt && answer) out.push({id:`q${i+1}`,prompt,answer});
+  });
+  return out;
+}
+async function loadLesson(){
+  try{
+    const s=await (await fetch('/api/state')).json();
+    const l=s.lesson||{};
+    $('#lesson_enabled').checked=!!l.enabled;
+    $('#lesson_title').value=l.title||'';
+    $('#lesson_accuracy').value=l.min_accuracy??80;
+    $('#lesson_reward').value=l.reward_seconds??300;
+    $('#lesson_questions').value=(l.questions||[]).map(q=>`${q.prompt} :: ${q.answer||''}`).join('\n');
+    $('#lesson_url').textContent=s.lesson_url||'—';
+  }catch(e){}
+}
+$('#saveLesson').onclick=async()=>{
+  const questions=parseLessonLines($('#lesson_questions').value);
+  if(!questions.length){ flash('Add at least one Question :: Answer line'); return; }
+  const body={
+    enabled:$('#lesson_enabled').checked,
+    title:$('#lesson_title').value.trim()||"Today's lesson",
+    questions,
+    min_accuracy:parseInt($('#lesson_accuracy').value||'80',10),
+    reward_seconds:parseInt($('#lesson_reward').value||'300',10),
+  };
+  const r=await fetch('/api/lesson',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  const j=await r.json();
+  if(j.ok){
+    $('#lessonSaved').textContent=`Saved ${questions.length} tasks. Reward: all completed + first-attempt accuracy ≥ ${body.min_accuracy}% → ${body.reward_seconds}s.`;
+    $('#lesson_url').textContent=j.lesson_url||$('#lesson_url').textContent;
+    flash('Lesson saved');
+  }else flash('Lesson save failed');
+};
+
+connect(); loadPolicies(); loadLesson();
