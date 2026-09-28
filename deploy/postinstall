@@ -1,0 +1,8 @@
+#!/bin/bash
+# pkg postinstall: runs as root at install time.
+# We keep this minimal: the per-user LaunchAgent is loaded by INSTALL.command
+# in the logged-in user's context (a root postinstall cannot reliably load a
+# GUI-session LaunchAgent). Here we just guarantee file modes.
+chmod 755 /usr/local/acos/acos-agent 2>/dev/null || true
+chmod 644 /usr/local/acos/com.acos.studentagent.plist 2>/dev/null || true
+exit 0

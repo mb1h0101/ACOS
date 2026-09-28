@@ -1,0 +1,93 @@
+{
+  "config": {
+    "agents": 40,
+    "transport": "websocket",
+    "host": "127.0.0.1",
+    "note": "real agent code; OS enforcement simulated on Linux"
+  },
+  "connect": {
+    "all_online_ms": 204.7,
+    "online_peak": 40,
+    "online_after_forced_drop": 40,
+    "forced_drops": 5
+  },
+  "reward_auto_return_to": "EXERCISE",
+  "latency_ms": {
+    "agent_command_latency": {
+      "n": 362,
+      "min": 7.2,
+      "p50": 98.4,
+      "p95": 184.1,
+      "max": 205.2,
+      "mean": 99.7
+    },
+    "broadcast_latency": {
+      "n": 200,
+      "min": 2.6,
+      "p50": 34.0,
+      "p95": 62.9,
+      "max": 77.2,
+      "mean": 34.4
+    },
+    "thumbnail_latency": {
+      "n": 120,
+      "min": 3.0,
+      "p50": 50.8,
+      "p95": 86.2,
+      "max": 96.9,
+      "mean": 49.2
+    },
+    "mode_transition_latency": {
+      "n": 282,
+      "min": 0.0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "max": 0.1,
+      "mean": 0.0
+    },
+    "connect_duration": {
+      "n": 45,
+      "min": 1.2,
+      "p50": 19.9,
+      "p95": 28.3,
+      "max": 31.1,
+      "mean": 18.3
+    },
+    "install_duration": {},
+    "permission_duration": {}
+  },
+  "completion": {
+    "completed": 36,
+    "attempts": 40,
+    "pct": 90.0
+  },
+  "first_attempt_accuracy": {
+    "correct": 20,
+    "attempts": 40,
+    "pct": 50.0
+  },
+  "event_counts": {
+    "agent_command_latency": 362,
+    "agent_online_snapshot": 10,
+    "blocked_app": 1,
+    "broadcast_latency": 200,
+    "class_completion_milestone": 4,
+    "connect_duration": 45,
+    "disconnect": 5,
+    "first_attempt_accuracy": 40,
+    "hint": 14,
+    "mode_enter": 327,
+    "mode_transition_latency": 282,
+    "reconnect": 5,
+    "retry": 8,
+    "reward_end": 40,
+    "reward_start": 40,
+    "task_completion": 40,
+    "task_start": 40,
+    "teacher_intervention": 91,
+    "thumbnail_latency": 120,
+    "time_on_task": 40
+  },
+  "milestones_fired": [],
+  "timestamp": "2026-09-28T20:15:06"
+}

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.acos.studentagent</string>
+
+  <!-- The pkg installs the self-contained agent binary here. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/acos/acos-agent</string>
+  </array>
+
+  <!-- Run in the logged-in user's GUI session: required so the agent can
+       screen-capture, read the frontmost app, and show the overlay. This is
+       a LaunchAgent (per-user), NOT a LaunchDaemon (root), by design. -->
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Restart within the class session if the agent crashes (crash recovery
+       is also handled in-app via the session marker). -->
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>3</integer>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/acos-agent.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/acos-agent.err.log</string>
+
+  <!-- Optional manual console override; discovery is used when empty. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>ACOS_CONSOLE</key>
+    <string></string>
+  </dict>
+</dict>
+</plist>

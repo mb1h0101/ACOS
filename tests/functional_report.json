@@ -1,0 +1,157 @@
+{
+  "passed": 30,
+  "total": 30,
+  "timestamp": "2026-09-28T20:23:54",
+  "results": [
+    {
+      "test": "allowlist allows exact host",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "allowlist allows subdomain",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "allowlist blocks other host",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "blocklist blocks listed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "blocklist allows unlisted",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "site off allows everything",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "app blocklist blocks Messages",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "app blocklist allows Safari",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "app allowlist blocks Terminal",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "validate accepts good msg",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "validate rejects wrong version",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "validate rejects non-dict",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "session id anonymous format",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "json export is list of events",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "csv has header",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "csv contains no name column",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "agent connects",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "agent applied EXERCISE",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "command latency recorded",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "blocked_navigation logged",
+      "pass": true,
+      "detail": "count=1"
+    },
+    {
+      "test": "blocked_app logged",
+      "pass": true,
+      "detail": "count=1"
+    },
+    {
+      "test": "allowed content not blocked",
+      "pass": true,
+      "detail": "1->1"
+    },
+    {
+      "test": "emergency returns to EXERCISE",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "emergency clears overlay",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "reward applied",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "reward auto-returns to EXERCISE",
+      "pass": true,
+      "detail": "class_mode=EXERCISE"
+    },
+    {
+      "test": "reward_start + reward_end logged",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "first boot not flagged as recovery",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "test": "second boot detects crash recovery",
+      "pass": true,
+      "detail": "prev=s-4e129579d4db4679"
+    },
+    {
+      "test": "crash_recovery event reported",
+      "pass": true,
+      "detail": ""
+    }
+  ]
+}

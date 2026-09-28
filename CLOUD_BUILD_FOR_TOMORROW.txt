@@ -1,0 +1,27 @@
+ACOS cloud build for tomorrow
+=============================
+
+1. Create a GitHub repository (private is fine).
+2. Upload ALL contents of this folder to the repository root.
+   Keep .github/workflows/build-macos.yml exactly at that path.
+3. Open the repository -> Actions -> Build ACOS macOS artifacts -> Run workflow.
+4. When the run is green, open the completed run and download artifact:
+   ACOS-macOS-USB-build
+5. Unzip the artifact and copy ACOS_USB (or ACOS_USB.zip contents) to your USB drive.
+
+The final USB payload contains:
+- TeacherConsole.app
+- StudentAgent.pkg
+- INSTALL.command
+- UNINSTALL.command
+- EMERGENCY_RESET.command
+
+Tomorrow:
+- Teacher Mac: open TeacherConsole.app.
+- Student Macs: double-click INSTALL.command and enter the administrator password.
+- Approve Screen Recording / Accessibility if macOS asks.
+- Confirm each seat becomes Online in Teacher Console.
+
+This is a test build. TeacherConsole.app is ad-hoc signed. StudentAgent.pkg is unsigned/not notarized.
+For broad/public distribution later, add Apple Developer ID signing + notarization.
+Do not disable Gatekeeper or bypass macOS security controls.

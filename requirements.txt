@@ -1,0 +1,5 @@
+# ACOS runtime dependencies (both console and agent)
+aiohttp>=3.9
+zeroconf>=0.130
+pillow>=10.0   # only needed to render teacher broadcast JPEGs on the agent
+# Build-only (not required at runtime): pyinstaller

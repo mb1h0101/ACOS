@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ACOS Teacher Console</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="brand">ACOS <span>Teacher Console</span></div>
+  <div class="status">
+    <span id="conn" class="pill">connecting…</span>
+    <span class="pill">Online <b id="online">0</b>/<b id="total">0</b></span>
+    <span class="pill">Class mode <b id="classmode">—</b></span>
+    <span id="rewardpill" class="pill hidden">Reward <b id="rewardleft">0</b>s</span>
+  </div>
+</header>
+
+<div class="bar">
+  <div class="modes">
+    <button class="mode" data-mode="DEMO">1 · DEMO</button>
+    <button class="mode" data-mode="EXERCISE">2 · EXERCISE</button>
+    <button class="mode reward" data-mode="REWARD">3 · REWARD</button>
+    <button class="mode" data-mode="FREE">4 · FREE</button>
+    <button id="focusnow" class="act">5 · FOCUS NOW</button>
+    <button id="blackout" class="act danger">6 · BLACKOUT</button>
+    <button id="clearoverlay" class="act">Clear overlay</button>
+  </div>
+  <div class="modes">
+    <button id="bcast" class="act">7 · Broadcast my screen</button>
+    <button id="thumbs" class="act">Refresh thumbnails</button>
+    <button id="emergency" class="act danger">16 · Emergency → Focus</button>
+  </div>
+</div>
+
+<div class="selbar">
+  <label><input type="checkbox" id="selall" checked> Whole class</label>
+  <span id="selinfo" class="muted">Targeting: all students. Click a tile to target one.</span>
+  <span class="grow"></span>
+  <label>Reward seconds <input type="number" id="rewardsec" value="300" min="10" max="3600" style="width:70px"></label>
+</div>
+
+<main>
+  <section id="grid" class="grid"><!-- student tiles --></section>
+
+  <aside class="panel">
+    <div class="tabs">
+      <button class="tab active" data-tab="policy">Allow / Block</button>
+      <button class="tab" data-tab="analytics">Analytics</button>
+    </div>
+
+    <div id="tab-policy" class="tabpane">
+      <p class="muted">Edit the policy for a mode, then it is pushed to any student currently in that mode (and used next time you enter it).</p>
+      <label>Mode
+        <select id="polmode">
+          <option>EXERCISE</option><option>DEMO</option>
+          <option>REWARD</option><option>FREE</option>
+        </select>
+      </label>
+      <fieldset>
+        <legend>10/11 · Websites</legend>
+        <label>Site rule
+          <select id="site_mode"><option value="off">off</option>
+            <option value="allowlist">allowlist</option>
+            <option value="blocklist">blocklist</option></select>
+        </label>
+        <label>Allowlist (one host per line)
+          <textarea id="site_allow" rows="3" placeholder="khanacademy.org"></textarea></label>
+        <label>Blocklist (one host per line)
+          <textarea id="site_block" rows="3" placeholder="youtube.com"></textarea></label>
+      </fieldset>
+      <fieldset>
+        <legend>12 · Apps</legend>
+        <label>App rule
+          <select id="app_mode"><option value="off">off</option>
+            <option value="allowlist">allowlist</option>
+            <option value="blocklist">blocklist</option></select>
+        </label>
+        <label>App allowlist (one per line)
+          <textarea id="app_allow" rows="2" placeholder="Safari"></textarea></label>
+        <label>App blocklist (one per line)
+          <textarea id="app_block" rows="2" placeholder="Messages"></textarea></label>
+        <label class="row"><input type="checkbox" id="kill_blocked_apps"> Quit a blocked app if brought to front</label>
+        <label class="row"><input type="checkbox" id="fullscreen"> Lock into fullscreen learning env</label>
+      </fieldset>
+      <button id="savepol" class="act primary">Save &amp; push policy</button>
+    </div>
+
+    <div id="tab-analytics" class="tabpane hidden">
+      <div class="kpis">
+        <div class="kpi"><b id="kpi_completion">0%</b><span>17 · Completion</span></div>
+        <div class="kpi"><b id="kpi_accuracy">0%</b><span>First-attempt acc.</span></div>
+        <div class="kpi"><b id="kpi_cmd">–</b><span>Cmd latency p50</span></div>
+        <div class="kpi"><b id="kpi_thumb">–</b><span>Thumb latency p50</span></div>
+        <div class="kpi"><b id="kpi_bcast">–</b><span>Broadcast p50</span></div>
+        <div class="kpi"><b id="kpi_mode">–</b><span>Mode switch p50</span></div>
+      </div>
+      <h4>Event counts</h4>
+      <table id="counts"></table>
+      <h4>18 · Export</h4>
+      <a class="act" href="/api/export.csv">Download CSV</a>
+      <a class="act" href="/api/export.json">Download JSON</a>
+    </div>
+  </aside>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
