@@ -59,6 +59,7 @@ jobs:
           cp -R dist/TeacherConsole.app ACOS_USB/
           cp dist/StudentAgent.pkg ACOS_USB/
           cp deploy/INSTALL.command ACOS_USB/
+          cp deploy/TEACHER_CONSOLE.txt ACOS_USB/
           cp deploy/UNINSTALL.command ACOS_USB/
           cp deploy/EMERGENCY_RESET.command ACOS_USB/
           chmod +x ACOS_USB/*.command
