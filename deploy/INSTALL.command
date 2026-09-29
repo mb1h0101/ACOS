@@ -27,12 +27,19 @@ if [[ ! -f "$PKG" ]]; then
 fi
 
 # --- 1. Install the pkg with a single GUI admin prompt ---------------------
-# `installer` needs root; we request it via the standard macOS GUI prompt so
-# the teacher/technician types the admin password into macOS itself, never
-# into this script.
+# macOS privacy controls can prevent a privileged AppleScript shell from
+# reading a package directly from Desktop/Downloads/USB locations. Stage the
+# package in /private/tmp first, install from there, then clean it up.
+TMP_PKG="/private/tmp/ACOS-StudentAgent.pkg"
+rm -f "$TMP_PKG"
+cp "$PKG" "$TMP_PKG"
+chmod 644 "$TMP_PKG"
+
 echo "Installing agent (you will be asked for the administrator password once)…"
-osascript -e "do shell script \"installer -pkg '$PKG' -target /\" with administrator privileges" \
-  >>"$LOG" 2>&1 || { echo "Install failed. See $LOG"; read -n1 -r; exit 1; }
+osascript -e "do shell script \"/usr/sbin/installer -pkg '$TMP_PKG' -target /\" with administrator privileges" \
+  >>"$LOG" 2>&1 || { echo "Install failed. See $LOG"; rm -f "$TMP_PKG"; read -n1 -r; exit 1; }
+
+rm -f "$TMP_PKG"
 
 # --- 2. Load + start the LaunchAgent in the current user session -----------
 PLIST="$HOME/Library/LaunchAgents/com.acos.studentagent.plist"
