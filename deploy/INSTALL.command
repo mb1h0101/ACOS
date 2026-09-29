@@ -49,6 +49,20 @@ osascript -e "do shell script \"/usr/sbin/installer -pkg '$TMP_PKG' -target /\" 
 
 rm -f "$TMP_PKG"
 
+# --- 1b. Optional fixed Teacher Console address ----------------------------
+# For school networks where Bonjour/mDNS/UDP discovery is filtered, place a
+# TEACHER_CONSOLE.txt next to INSTALL.command containing e.g. 192.168.1.21:8770.
+# The same USB can then be used on every student Mac without typing commands.
+TEACHER_CFG="$HERE/TEACHER_CONSOLE.txt"
+if [[ -f "$TEACHER_CFG" ]]; then
+  cfg="$(tr -d '\r\n ' < "$TEACHER_CFG")"
+  if [[ "$cfg" == *:* ]]; then
+    mkdir -p "$HOME/Library/Application Support/ACOS"
+    printf '%s\n' "$cfg" > "$HOME/Library/Application Support/ACOS/console.txt"
+    echo "Teacher Console fixed address: $cfg"
+  fi
+fi
+
 # --- 2. Load + start the LaunchAgent in the current user session -----------
 PLIST="$HOME/Library/LaunchAgents/com.acos.studentagent.plist"
 mkdir -p "$HOME/Library/LaunchAgents"
