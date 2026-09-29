@@ -30,6 +30,7 @@ simulated signal so the full agent logic can run and be tested.
 from __future__ import annotations
 
 import base64
+import ctypes
 import os
 import platform
 import shutil
@@ -73,18 +74,31 @@ def check_permissions() -> dict:
     return res
 
 
-def _probe_screen_recording() -> Optional[bool]:
+def _screen_recording_granted() -> Optional[bool]:
+    """Query macOS Screen Recording TCC state without triggering a prompt.
+
+    CGPreflightScreenCaptureAccess() is the supported non-interactive preflight
+    API on macOS 10.15+.  Unlike invoking `screencapture`, it does not request
+    permission and therefore cannot create a repeating permission-dialog loop.
+    """
+    if not IS_MAC:
+        return True
     try:
-        fd, path = tempfile.mkstemp(suffix=".png")
-        os.close(fd)
-        subprocess.run(["screencapture", "-x", "-t", "png", "-R", "0,0,4,4", path],
-                       timeout=5, capture_output=True)
-        ok = os.path.exists(path) and os.path.getsize(path) > 0
-        os.unlink(path)
-        # A successful non-empty capture strongly implies permission granted.
-        return True if ok else False
+        cg = ctypes.CDLL(
+            "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics"
+        )
+        fn = cg.CGPreflightScreenCaptureAccess
+        fn.argtypes = []
+        fn.restype = ctypes.c_bool
+        return bool(fn())
     except Exception:
+        # Unknown is safer than probing by taking a screenshot, because the
+        # latter can itself trigger TCC prompts repeatedly.
         return None
+
+
+def _probe_screen_recording() -> Optional[bool]:
+    return _screen_recording_granted()
 
 
 def _probe_accessibility() -> Optional[bool]:
@@ -107,6 +121,13 @@ def capture_thumbnail_jpeg_b64(max_w: int = 320, quality: int = 40) -> Optional[
     """Capture the primary display and return a small base64 JPEG, or None."""
     if not IS_MAC:
         return _simulated_thumbnail(max_w)
+
+    # Never invoke screencapture when TCC has not granted Screen Recording.
+    # Invoking it while denied can cause macOS to show a permission dialog on
+    # every thumbnail cycle (the agent pushes every few seconds).
+    if _screen_recording_granted() is not True:
+        return None
+
     try:
         fd, raw = tempfile.mkstemp(suffix=".jpg")
         os.close(fd)
