@@ -14,6 +14,14 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PKG="$HERE/StudentAgent.pkg"
 LOG="/tmp/acos-install.log"
+
+# Fresh GitHub/browser downloads are commonly tagged by macOS with
+# com.apple.quarantine.  Once this script is launched (for example with
+# `bash INSTALL.command` if Finder blocks the first launch), clear the tag
+# for the whole deployment folder so TeacherConsole.app and the other helper
+# scripts do not keep triggering Gatekeeper prompts on this Mac.
+xattr -dr com.apple.quarantine "$HERE" 2>/dev/null || true
+chmod +x "$HERE"/*.command 2>/dev/null || true
 START_TS=$(python3 -c 'import time;print(int(time.time()*1000))' 2>/dev/null || date +%s000)
 
 echo "==============================================="
