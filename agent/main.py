@@ -354,7 +354,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--console", default=os.environ.get("ACOS_CONSOLE"),
                     help="host:port override (else auto-discover)")
-    ap.add_argument("--no-thumb", action="store_true")
+    ap.add_argument("--auto-thumb", action="store_true",
+                    help="enable unsolicited periodic thumbnail pushes (off by default)")
     ap.add_argument("--check-perms", action="store_true",
                     help="print permission status and exit")
     args = ap.parse_args()
@@ -363,7 +364,7 @@ def main():
         print(json.dumps(ENF.check_permissions(), indent=2))
         return
 
-    agent = Agent(console=args.console, thumb_push=not args.no_thumb)
+    agent = Agent(console=args.console, thumb_push=args.auto_thumb)
     print(f"[ACOS agent] id={agent.agent_id} session={agent.session_id} "
           f"recovered={agent.recovered}")
     try:
