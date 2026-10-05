@@ -243,13 +243,15 @@ class Console:
                 self.console_ws.remove(ws)
 
     async def push_state(self):
+        students = [a for a in self.agents.values() if not a.protected_from_classroom]
         await self.push_console({
             "type": "state",
             "class_mode": self.class_mode,
             "reward_remaining": max(0, int(self.reward_ends_at - time.time())) if self.reward_ends_at else 0,
             "agents": [a.public() for a in self.agents.values()],
-            "online": sum(1 for a in self.agents.values() if a.online),
-            "total": len(self.agents),
+            "online": sum(1 for a in students if a.online),
+            "total": len(students),
+            "allow_teacher_test": self.allow_teacher_test,
         })
 
     # ---- send to agents ---------------------------------------------------
@@ -332,9 +334,10 @@ class Console:
         base.update(patch)
         base["mode"] = mode
         self.policies[mode] = Policy.from_dict(base)
-        # re-push to any agent currently in that mode
+        # re-push to any student currently in that mode. The teacher Mac stays
+        # immune unless explicit local-test mode is enabled.
         for a in self.agents.values():
-            if a.mode == mode:
+            if a.mode == mode and (self.allow_teacher_test or not a.protected_from_classroom):
                 cmd_id = P.uuid.uuid4().hex[:12]
                 a.pending[cmd_id] = {"ts": time.time(), "cmd": "set_policy"}
                 await self.send_agent(a, P.msg(P.T_SET_POLICY, cmd_id=cmd_id,
@@ -503,12 +506,15 @@ def make_app(console: Console) -> web.Application:
                     if m.get("recovered") and prev:
                         console.analytics.record(conn.session_id, EV.CRASH_RECOVERY,
                                                  {"prev_session_id": prev})
+                    welcome_mode = console.class_mode
+                    if conn.protected_from_classroom and not console.allow_teacher_test:
+                        welcome_mode = P.MODE_FREE
                     await console.send_agent(conn, P.msg(
                         P.T_WELCOME, agent_id=aid,
-                        class_mode=console.class_mode,
-                        policy=console.policies.get(console.class_mode,
-                                                    Policy(mode=console.class_mode)).to_dict()))
-                    conn.mode = console.class_mode
+                        class_mode=welcome_mode,
+                        policy=console.policies.get(welcome_mode,
+                                                    Policy(mode=welcome_mode)).to_dict()))
+                    conn.mode = welcome_mode
                     await console.push_state()
 
                 elif conn is None:
@@ -586,13 +592,14 @@ def make_app(console: Console) -> web.Application:
     # ---- REST API ---------------------------------------------------------
     async def api_state(request):
         port = request.app.get("acos_port", 8770)
+        students = [a for a in console.agents.values() if not a.protected_from_classroom]
         return web.json_response({
             "class_mode": console.class_mode,
             "reward_remaining": max(0, int(console.reward_ends_at - time.time())) if console.reward_ends_at else 0,
             "agents": [a.public() for a in console.agents.values()],
             "policies": {k: v.to_dict() for k, v in console.policies.items()},
-            "online": sum(1 for a in console.agents.values() if a.online),
-            "total": len(console.agents),
+            "online": sum(1 for a in students if a.online),
+            "total": len(students),
             "lesson": console.lesson,
             "lesson_url": f"http://{_local_ip()}:{port}/lesson",
             "allow_teacher_test": console.allow_teacher_test,
