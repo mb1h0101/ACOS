@@ -497,7 +497,11 @@ def make_app(console: Console) -> web.Application:
                     conn.platform = m.get("platform", "?")
                     # If StudentAgent is also installed on the Teacher Mac,
                     # keep it immune from classroom commands by default.
+                    sockname = request.transport.get_extra_info("sockname")
+                    server_ip = sockname[0] if sockname else None
                     local_ips = {"127.0.0.1", "::1", _local_ip()}
+                    if server_ip:
+                        local_ips.add(server_ip)
                     conn.protected_from_classroom = ip in local_ips
                     conn.label = console.labels.get(aid, conn.label)
                     prev = m.get("prev_session_id")
