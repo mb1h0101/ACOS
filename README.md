@@ -1,4 +1,4 @@
-# ACOS — Adaptive Classroom Orchestration System (v0.1)
+# ACOS — Adaptive Classroom Orchestration System (v0.2 classroom candidate)
 
 A self-contained classroom orchestration system for macOS computer labs:
 **one Teacher Console** driving **~40 Student Agents** over the local network.
@@ -18,12 +18,21 @@ implements its own broadcast, blackout, monitoring and policy enforcement.
 > for **on-device verification** in `docs/QA_CHECKLIST.md`.
 
 ## What the teacher uses
-A single web console (served locally by `TeacherConsole.app`). Nothing else.
-Modes **DEMO / EXERCISE / REWARD / FREE**, **FOCUS NOW**, **BLACKOUT**,
-teacher **screen broadcast**, **thumbnail monitoring**, whole-class or single
-student targeting, **site & app allow/block**, **reward countdown with
-auto-return to EXERCISE**, **online/offline + per-seat mode**, **emergency
-return to focus**, **learning-analytics dashboard**, and **CSV/JSON export**.
+A single Traditional-Chinese web console served locally by
+`TeacherConsole.app`.
+
+The normal classroom workflow is deliberately small:
+
+1. set the websites/apps allowed for this lesson;
+2. press **請全班看老師** when the teacher needs attention;
+3. press the same control (**讓學生繼續操作**) to return students to the
+   existing work state;
+4. use **結束課堂／解除全部限制** as the guaranteed release.
+
+The backend still contains earlier experimental mode/analytics/lesson APIs for
+compatibility, but they are intentionally not exposed as a wall of controls in
+the classroom UI. See `docs/ACOS_CLASSROOM_V02_HANDOFF.md` for the design and
+real-Mac acceptance test.
 
 ## Repository layout
 ```
