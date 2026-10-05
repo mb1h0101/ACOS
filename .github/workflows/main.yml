@@ -3,7 +3,7 @@ name: Build ACOS macOS artifacts
 on:
   workflow_dispatch:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main", "master", "acos-classroom-v0.2" ]
 
 jobs:
   build-macos:
