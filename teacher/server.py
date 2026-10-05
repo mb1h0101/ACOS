@@ -58,6 +58,7 @@ class AgentConn:
         self.last_thumb_b64: Optional[str] = None
         self.last_thumb_ts: float = 0.0
         self.platform: str = "?"
+        self.protected_from_classroom: bool = False
         self.pending: Dict[str, dict] = {}  # cmd_id -> {"ts":, "cmd":}
         self.thumb_reqs: Dict[str, float] = {}  # req_id -> send ts
         self.bcast_sent: Dict[str, float] = {}  # frame_id -> send ts
@@ -72,6 +73,7 @@ class AgentConn:
             "online": self.online,
             "ip": self.ip,
             "platform": self.platform,
+            "protected_from_classroom": self.protected_from_classroom,
             "last_thumb_ts": int(self.last_thumb_ts * 1000),
             "age": round(time.time() - self.last_seen, 1),
         }
@@ -95,6 +97,9 @@ class Console:
         self.lesson_path = os.path.expanduser("~/ACOS/lesson.json")
         self.lesson = self._load_lesson()
         self.lesson_progress: Dict[str, dict] = {}
+        # The Mac running Teacher Console is protected from classroom commands
+        # by default.  It can be deliberately included only for local testing.
+        self.allow_teacher_test: bool = False
 
     # ---- lesson / adaptive reward -----------------------------------------
     def _load_lesson(self) -> dict:
@@ -256,10 +261,34 @@ class Console:
 
     def _targets(self, targets) -> List[AgentConn]:
         if targets in (None, "all", ["all"]):
-            return list(self.agents.values())
-        if isinstance(targets, str):
-            targets = [targets]
-        return [self.agents[t] for t in targets if t in self.agents]
+            selected = list(self.agents.values())
+        else:
+            if isinstance(targets, str):
+                targets = [targets]
+            selected = [self.agents[t] for t in targets if t in self.agents]
+        if not self.allow_teacher_test:
+            selected = [a for a in selected if not a.protected_from_classroom]
+        return selected
+
+    async def cmd_restore_all(self):
+        """Hard classroom release: remove overlays and return every student
+        device to FREE. Teacher-protected devices are never targeted."""
+        await self._cancel_reward()
+        for a in self._targets("all"):
+            cmd_id = P.uuid.uuid4().hex[:12]
+            pol = self.policies.get(P.MODE_FREE, Policy(mode=P.MODE_FREE)).to_dict()
+            a.pending[cmd_id] = {"ts": time.time(), "cmd": "restore_all"}
+            await self.send_agent(a, P.msg(P.T_SET_MODE, cmd_id=cmd_id,
+                                           mode=P.MODE_FREE, policy=pol))
+            await self.send_agent(a, P.msg(P.T_SET_OVERLAY,
+                                           cmd_id=P.uuid.uuid4().hex[:12],
+                                           overlay=P.OVERLAY_NONE))
+            a.mode = P.MODE_FREE
+            a.overlay = P.OVERLAY_NONE
+        self.class_mode = P.MODE_FREE
+        self.analytics.record("_teacher", EV.TEACHER_INTERVENTION,
+                              {"kind": "restore_all"})
+        await self.push_state()
 
     async def cmd_set_mode(self, mode: str, targets=None, reward_seconds: int = 0):
         if mode not in P.MODES:
@@ -463,6 +492,10 @@ def make_app(console: Console) -> web.Application:
                     conn.last_seen = time.time()
                     conn.session_id = m.get("session_id", "")
                     conn.platform = m.get("platform", "?")
+                    # If StudentAgent is also installed on the Teacher Mac,
+                    # keep it immune from classroom commands by default.
+                    local_ips = {"127.0.0.1", "::1", _local_ip()}
+                    conn.protected_from_classroom = ip in local_ips
                     conn.label = console.labels.get(aid, conn.label)
                     prev = m.get("prev_session_id")
                     console.agents[aid] = conn
@@ -562,6 +595,7 @@ def make_app(console: Console) -> web.Application:
             "total": len(console.agents),
             "lesson": console.lesson,
             "lesson_url": f"http://{_local_ip()}:{port}/lesson",
+            "allow_teacher_test": console.allow_teacher_test,
         })
 
     async def lesson_page(request):
@@ -628,6 +662,24 @@ def make_app(console: Console) -> web.Application:
             await console.broadcast_start(targets, float(body.get("fps", 1.0)))
         elif action == "broadcast_stop":
             await console.broadcast_stop()
+        elif action == "restore_all":
+            await console.cmd_restore_all()
+        elif action == "set_teacher_test":
+            console.allow_teacher_test = bool(body.get("enabled", False))
+            if not console.allow_teacher_test:
+                # Immediately release the protected local agent if it had been
+                # used for testing, so the teacher can never lock themselves out.
+                for a in console.agents.values():
+                    if a.protected_from_classroom:
+                        await console.send_agent(a, P.msg(P.T_SET_MODE,
+                            cmd_id=P.uuid.uuid4().hex[:12],
+                            mode=P.MODE_FREE,
+                            policy=console.policies.get(P.MODE_FREE, Policy(mode=P.MODE_FREE)).to_dict()))
+                        await console.send_agent(a, P.msg(P.T_SET_OVERLAY,
+                            cmd_id=P.uuid.uuid4().hex[:12], overlay=P.OVERLAY_NONE))
+                        a.mode = P.MODE_FREE
+                        a.overlay = P.OVERLAY_NONE
+            await console.push_state()
         elif action == "label":
             aid = body["agent_id"]
             console.labels[aid] = body.get("label", "")
