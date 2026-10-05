@@ -331,10 +331,10 @@ class Agent:
 
         pol = self.policy
         blocked_message = None
+        app = ENF.frontmost_app()
 
         # app enforcement
         if pol.app_mode != "off":
-            app = ENF.frontmost_app()
             if app and not app_allowed(app, pol):
                 if self._throttle("app:" + app):
                     await self.event(EV.BLOCKED_APP, {"app": app})
@@ -343,8 +343,12 @@ class Agent:
                 else:
                     blocked_message = "這個 App 目前未開放，請回到本堂課指定工具"
 
-        # site enforcement
-        if pol.site_mode != "off":
+        # Site enforcement only inspects the browser that is actually in front.
+        # Do not punish a student because a blocked tab exists in a background
+        # browser while they are correctly working in another app.
+        app_l = (app or "").lower()
+        browser_front = ("chrome" in app_l or "safari" in app_l)
+        if pol.site_mode != "off" and browser_front:
             host = ENF.frontmost_browser_host()
             if host and not site_allowed(host, pol):
                 if self._throttle("site:" + host):
