@@ -295,7 +295,7 @@ class Agent:
             app = ENF.frontmost_app()
             if app and not app_allowed(app, self.policy) and self.policy.app_mode != "off":
                 ENF.terminate_app(app)
-            self.overlay_win.kiosk("Focus now")
+            self.overlay_win.kiosk("請看老師")
         elif overlay in (P.OVERLAY_NONE,):
             self.overlay_win.hide()
         await self.event(EV.TEACHER_INTERVENTION, {"kind": "overlay", "overlay": overlay})
@@ -320,9 +320,18 @@ class Agent:
             self._was_inactive = False
 
         if self.mode not in (P.MODE_EXERCISE, P.MODE_DEMO):
+            if self.overlay_win.state == "policy_block":
+                self.overlay_win.hide()
             return  # only enforce in restricted modes
 
+        # A teacher-initiated overlay owns the screen until the teacher releases
+        # it. Policy monitoring must not replace or fight that overlay.
+        if self.overlay != P.OVERLAY_NONE:
+            return
+
         pol = self.policy
+        blocked_message = None
+
         # app enforcement
         if pol.app_mode != "off":
             app = ENF.frontmost_app()
@@ -332,14 +341,22 @@ class Agent:
                 if pol.kill_blocked_apps:
                     ENF.terminate_app(app)
                 else:
-                    self.overlay_win.blackout("This app is blocked during class")
+                    blocked_message = "這個 App 目前未開放，請回到本堂課指定工具"
+
         # site enforcement
         if pol.site_mode != "off":
             host = ENF.frontmost_browser_host()
             if host and not site_allowed(host, pol):
                 if self._throttle("site:" + host):
                     await self.event(EV.BLOCKED_NAVIGATION, {"host": host})
-                self.overlay_win.blackout("This site is blocked during class")
+                blocked_message = "這個網站目前未開放，請回到本堂課指定網站"
+
+        if blocked_message:
+            self.overlay_win.policy_notice(blocked_message)
+        elif self.overlay_win.state == "policy_block":
+            # Critical recovery rule: a policy warning disappears automatically
+            # as soon as the student returns to an allowed resource.
+            self.overlay_win.hide()
 
     def _throttle(self, key: str, window: float = 8.0) -> bool:
         now = time.time()
