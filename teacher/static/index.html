@@ -1,134 +1,73 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ACOS Teacher Console</title>
+<title>ACOS 教室控制</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header>
-  <div class="brand">ACOS <span>Teacher Console</span></div>
+<header class="top">
+  <div>
+    <div class="brand">ACOS <span>宏仁教室控制</span></div>
+    <div class="sub">學生在本堂允許的數位資源內操作；老師需要說明時，只要暫時把全班注意力拉回來。</div>
+  </div>
   <div class="status">
-    <span id="conn" class="pill">connecting…</span>
-    <span class="pill">Online <b id="online">0</b>/<b id="total">0</b></span>
-    <span class="pill">Class mode <b id="classmode">—</b></span>
-    <span id="rewardpill" class="pill hidden">Reward <b id="rewardleft">0</b>s</span>
+    <span id="conn" class="pill">連線中…</span>
+    <span class="pill">學生在線 <b id="online">0</b>/<b id="total">0</b></span>
   </div>
 </header>
 
-<div class="bar">
-  <div class="modes">
-    <button class="mode" data-mode="DEMO">1 · DEMO</button>
-    <button class="mode" data-mode="EXERCISE">2 · EXERCISE</button>
-    <button class="mode reward" data-mode="REWARD">3 · REWARD</button>
-    <button class="mode" data-mode="FREE">4 · FREE</button>
-    <button id="focusnow" class="act">5 · FOCUS NOW</button>
-    <button id="blackout" class="act danger">6 · ATTENTION</button>
-    <button id="clearoverlay" class="act">Clear overlay</button>
-  </div>
-  <div class="modes">
-    <button id="bcast" class="act">7 · Broadcast my screen</button>
-    <button id="thumbs" class="act">Refresh thumbnails</button>
-    <button id="emergency" class="act danger">16 · Emergency → Focus</button>
-  </div>
-</div>
+<main class="layout">
+  <section class="card setup">
+    <div class="step">1</div>
+    <div class="content">
+      <h2>設定這堂課可以用什麼</h2>
+      <p class="hint">只填你這堂課會用到的網站或 App。留白代表該類不限制。</p>
 
-<div class="selbar">
-  <label><input type="checkbox" id="selall" checked> Whole class</label>
-  <span id="selinfo" class="muted">Targeting: all students. Click a tile to target one.</span>
-  <span class="grow"></span>
-  <label>Reward seconds <input type="number" id="rewardsec" value="300" min="10" max="3600" style="width:70px"></label>
-</div>
+      <label>允許的網站 <span>一行一個網域</span>
+        <textarea id="site_allow" rows="4" placeholder="例如：quizizz.com&#10;classroom.google.com"></textarea>
+      </label>
 
-<main>
-  <section id="grid" class="grid"><!-- student tiles --></section>
+      <label>允許的 App <span>一行一個名稱</span>
+        <textarea id="app_allow" rows="3" placeholder="例如：Google Chrome&#10;Pages"></textarea>
+      </label>
 
-  <aside class="panel">
-    <div class="tabs">
-      <button class="tab active" data-tab="policy">Allow / Block</button>
-      <button class="tab" data-tab="lesson">Lesson / Tasks</button>
-      <button class="tab" data-tab="analytics">Analytics</button>
+      <button id="apply" class="primary">套用到全班</button>
+      <div id="applymsg" class="result"></div>
     </div>
+  </section>
 
-    <div id="tab-policy" class="tabpane">
-      <p class="muted">Edit the policy for a mode, then it is pushed to any student currently in that mode (and used next time you enter it).</p>
-      <label>Mode
-        <select id="polmode">
-          <option>EXERCISE</option><option>DEMO</option>
-          <option>REWARD</option><option>FREE</option>
-        </select>
-      </label>
-      <fieldset>
-        <legend>10/11 · Websites</legend>
-        <label>Site rule
-          <select id="site_mode"><option value="off">off</option>
-            <option value="allowlist">allowlist</option>
-            <option value="blocklist">blocklist</option></select>
-        </label>
-        <label>Allowlist (one host per line)
-          <textarea id="site_allow" rows="3" placeholder="khanacademy.org"></textarea></label>
-        <label>Blocklist (one host per line)
-          <textarea id="site_block" rows="3" placeholder="youtube.com"></textarea></label>
-      </fieldset>
-      <fieldset>
-        <legend>12 · Apps</legend>
-        <label>App rule
-          <select id="app_mode"><option value="off">off</option>
-            <option value="allowlist">allowlist</option>
-            <option value="blocklist">blocklist</option></select>
-        </label>
-        <label>App allowlist (one per line)
-          <textarea id="app_allow" rows="2" placeholder="Safari"></textarea></label>
-        <label>App blocklist (one per line)
-          <textarea id="app_block" rows="2" placeholder="Messages"></textarea></label>
-        <label class="row"><input type="checkbox" id="kill_blocked_apps"> Quit a blocked app if brought to front</label>
-        <label class="row"><input type="checkbox" id="fullscreen"> Lock into fullscreen learning env</label>
-      </fieldset>
-      <button id="savepol" class="act primary">Save &amp; push policy</button>
+  <section class="card control">
+    <div class="step">2</div>
+    <div class="content">
+      <h2>上課中，只需要這一個控制</h2>
+      <p id="controlhint" class="hint">學生目前可以在你設定的範圍內操作。</p>
+      <button id="focus" class="focus">請全班看老師</button>
+      <p class="small">按下後學生原本的網站、App、文件都保留；再按同一顆按鈕就回到原本工作。</p>
+      <button id="restore" class="restore">結束課堂／解除全部限制</button>
     </div>
+  </section>
 
-
-    <div id="tab-lesson" class="tabpane hidden">
-      <p class="muted">Create a different lesson every class. One line per task: <b>Question :: Answer</b>. Multiple accepted answers use <b>|</b>.</p>
-      <label class="row"><input type="checkbox" id="lesson_enabled" checked> Enable lesson &amp; adaptive reward</label>
-      <label>Lesson title
-        <input type="text" id="lesson_title" placeholder="Photosynthesis" style="width:100%">
-      </label>
-      <label>Questions / answers
-        <textarea id="lesson_questions" rows="9" placeholder="Which gas is absorbed? :: carbon dioxide|CO2&#10;Which organelle? :: chloroplast"></textarea>
-      </label>
-      <div class="twocol">
-        <label>Minimum first-attempt accuracy (%)
-          <input type="number" id="lesson_accuracy" value="80" min="0" max="100">
-        </label>
-        <label>Reward seconds
-          <input type="number" id="lesson_reward" value="300" min="10" max="3600">
-        </label>
+  <section class="card students">
+    <div class="cardhead">
+      <div>
+        <h2>學生電腦</h2>
+        <p class="hint">只顯示目前狀態，不需要逐台操作。</p>
       </div>
-      <button id="saveLesson" class="act primary">Save lesson &amp; enable adaptive reward</button>
-      <div id="lessonSaved" class="muted" style="margin-top:8px"></div>
-      <h4>Student lesson URL</h4>
-      <div class="lessonurl"><code id="lesson_url">—</code></div>
-      <p class="muted">Students open this URL after StudentAgent is online. Answers are matched to that Mac by local IP and logged under its anonymous session.</p>
+      <button id="thumbs" class="secondary">更新畫面</button>
     </div>
+    <div id="grid" class="grid"></div>
+  </section>
 
-    <div id="tab-analytics" class="tabpane hidden">
-      <div class="kpis">
-        <div class="kpi"><b id="kpi_completion">0%</b><span>17 · Completion</span></div>
-        <div class="kpi"><b id="kpi_accuracy">0%</b><span>First-attempt acc.</span></div>
-        <div class="kpi"><b id="kpi_cmd">–</b><span>Cmd latency p50</span></div>
-        <div class="kpi"><b id="kpi_thumb">–</b><span>Thumb latency p50</span></div>
-        <div class="kpi"><b id="kpi_bcast">–</b><span>Broadcast p50</span></div>
-        <div class="kpi"><b id="kpi_mode">–</b><span>Mode switch p50</span></div>
-      </div>
-      <h4>Event counts</h4>
-      <table id="counts"></table>
-      <h4>18 · Export</h4>
-      <a class="act" href="/api/export.csv">Download CSV</a>
-      <a class="act" href="/api/export.json">Download JSON</a>
-    </div>
-  </aside>
+  <details class="card advanced">
+    <summary>測試與進階設定</summary>
+    <label class="check">
+      <input type="checkbox" id="teachertest">
+      允許這台教師機也接受學生控制（只有測試時才開）
+    </label>
+    <p class="warning">正式上課請保持關閉。關閉後教師機會立即解除 ACOS 控制。</p>
+  </details>
 </main>
 
 <script src="/static/app.js"></script>
