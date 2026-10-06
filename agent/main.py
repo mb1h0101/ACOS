@@ -225,6 +225,7 @@ class Agent:
         t = m.get("type")
         if t == P.T_WELCOME:
             self.agent_id = m.get("agent_id", self.agent_id)
+            print("[ACOS agent] connected to Teacher Console", flush=True)
             await self._apply_mode(m.get("class_mode", P.MODE_FREE),
                                    m.get("policy"), cmd_id=None)
         elif t == P.T_SET_MODE:
