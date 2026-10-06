@@ -15,10 +15,6 @@ function connect(){
   ws.onmessage=e=>{
     const m=JSON.parse(e.data);
     if(m.type==='state') renderState(m);
-    if(m.type==='thumb' && agents[m.agent_id]){
-      agents[m.agent_id]._thumb=m.data;
-      paintThumb(m.agent_id);
-    }
   };
 }
 
@@ -34,34 +30,24 @@ function renderState(m){
   const grid=$('#grid'), seen=new Set();
   (m.agents||[]).sort((a,b)=>a.agent_id.localeCompare(b.agent_id)).forEach(a=>{
     seen.add(a.agent_id);
-    const old=agents[a.agent_id];
-    a._thumb=old&&old._thumb;
     agents[a.agent_id]=a;
     let el=$('#a-'+a.agent_id);
     if(!el){
       el=document.createElement('div');
       el.id='a-'+a.agent_id;
       el.className='tile';
-      el.innerHTML='<div class="thumb"></div><div class="name"></div><div class="meta"></div>';
+      el.innerHTML='<div class="name"></div><div class="meta"></div>';
       grid.appendChild(el);
     }
     el.className='tile'+(!a.online?' offline':'')+(a.protected_from_classroom?' teacher':'');
     el.querySelector('.name').textContent=a.protected_from_classroom?'教師機（受保護）':'學生 '+a.agent_id.slice(-4);
     const state=!a.online?'離線':a.overlay==='FOCUS_NOW'?'正在看老師':a.mode==='FREE'?'未套用課堂限制':'課堂中';
     el.querySelector('.meta').innerHTML=`<span class="dot ${a.online?'on':''}"></span>${state}`;
-    paintThumb(a.agent_id);
   });
   document.querySelectorAll('.tile').forEach(el=>{
     const id=el.id.slice(2);
     if(!seen.has(id)) el.remove();
   });
-}
-
-function paintThumb(id){
-  const el=$('#a-'+id);
-  if(!el) return;
-  const th=el.querySelector('.thumb');
-  if(agents[id]&&agents[id]._thumb) th.style.backgroundImage=`url(data:image/jpeg;base64,${agents[id]._thumb})`;
 }
 
 function renderFocus(){
@@ -131,8 +117,6 @@ $('#restore').onclick=async()=>{
   await command({action:'restore_all',targets:'all'});
   $('#applymsg').textContent='課堂已結束，學生電腦已恢復一般操作。';
 };
-
-$('#thumbs').onclick=()=>command({action:'request_thumbs',targets:'all'});
 
 $('#teachertest').onchange=async()=>{
   await command({action:'set_teacher_test',enabled:$('#teachertest').checked,targets:'all'});
