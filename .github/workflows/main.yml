@@ -74,6 +74,7 @@ jobs:
           cp deploy/START_TEACHER.command ACOS_USB/
           chmod +x ACOS_USB/*.command
           cp README.md ACOS_USB/README.md
+          cp deploy/README_FIRST.txt ACOS_USB/
           ditto -c -k --sequesterRsrc --keepParent ACOS_USB ACOS_USB.zip
 
       - name: Verify required outputs
