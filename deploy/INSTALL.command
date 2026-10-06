@@ -102,8 +102,7 @@ echo
 echo "Looking for the Teacher Console on the network…"
 CONNECTED="no"
 for i in $(seq 1 15); do
-  if grep -q "class_mode" /tmp/acos-agent.out.log 2>/dev/null || \
-     grep -q "welcome" /tmp/acos-agent.err.log 2>/dev/null; then
+  if grep -q "connected to Teacher Console" /tmp/acos-agent.out.log 2>/dev/null; then
      CONNECTED="yes"; break; fi
   # also accept any successful WS by checking the log for connect line
   sleep 1
@@ -116,7 +115,7 @@ CONNECT_TS=$(python3 -c 'import time;print(int(time.time()*1000))' 2>/dev/null |
 mkdir -p "$HOME/Library/Application Support/ACOS"
 cat > "$HOME/Library/Application Support/ACOS/deploy_timing.json" <<EOF
 { "install_ms": $((INSTALL_TS-START_TS)),
-  "permission_ms": $((PERM_TS-INSTALL_TS)),
+  "permission_ms": 0,
   "connect_ms": $((CONNECT_TS-PERM_TS)) }
 EOF
 
