@@ -7,9 +7,8 @@ PLIST="$HOME/Library/LaunchAgents/com.acos.studentagent.plist"
 launchctl unload "$PLIST" 2>/dev/null || true
 rm -f "$PLIST"
 
-# Remove installed binary (needs admin).
-osascript -e 'do shell script "rm -rf /usr/local/acos" with administrator privileges' 2>/dev/null || \
-  rm -rf /usr/local/acos 2>/dev/null || true
+# Remove installed app + support files (needs admin).
+osascript -e 'do shell script "rm -rf \"/Applications/ACOS Student Agent.app\" /usr/local/acos" with administrator privileges' 2>/dev/null || true
 
 # Remove local app-support (analytics markers, timing — no PII).
 rm -rf "$HOME/Library/Application Support/ACOS"
@@ -19,7 +18,5 @@ rm -f /tmp/acos-agent.out.log /tmp/acos-agent.err.log
 pkgutil --forget com.acos.studentagent >/dev/null 2>&1 || true
 
 echo "Uninstall complete."
-echo "NOTE: macOS keeps the Screen Recording / Accessibility entries in"
-echo "System Settings until you remove them there manually (macOS does not"
-echo "let an app delete its own TCC grants)."
+echo "NOTE: macOS may keep Automation permission history for the app after uninstall."
 read -n1 -r -p "Press any key to close."
