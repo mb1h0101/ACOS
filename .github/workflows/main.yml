@@ -36,6 +36,14 @@ jobs:
         run: |
           ./deploy/build_pkg.sh
 
+      - name: Verify Student Agent app bundle inside pkg
+        run: |
+          rm -rf /tmp/acos-pkg-expand
+          pkgutil --expand-full dist/StudentAgent.pkg /tmp/acos-pkg-expand
+          test -d "/tmp/acos-pkg-expand/StudentAgent-component.pkg/Payload/Applications/ACOS Student Agent.app"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "/tmp/acos-pkg-expand/StudentAgent-component.pkg/Payload/Applications/ACOS Student Agent.app/Contents/Info.plist" | grep -x "com.acos.studentagent"
+          test -x "/tmp/acos-pkg-expand/StudentAgent-component.pkg/Payload/Applications/ACOS Student Agent.app/Contents/MacOS/acos-agent"
+
       - name: Preserve StudentAgent.pkg
         run: |
           cp dist/StudentAgent.pkg /tmp/StudentAgent.pkg
