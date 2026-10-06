@@ -4,11 +4,10 @@
 # Goal: insert USB -> double-click -> one admin prompt -> agent installed,
 # started, and auto-discovering the Teacher Console -> INSTALL SUCCESS.
 #
-# This script is HONEST about macOS permissions: the pkg cannot silently grant
-# Screen Recording or Accessibility (TCC). After install it checks them and, if
-# missing, tells you exactly which System Settings pane to click and opens it.
-#
-# Nothing here bypasses macOS security, and no password is stored on the USB.
+# Student screen thumbnails and teacher-screen broadcast are not part of the
+# classroom v0.2 workflow, so Screen Recording permission is NOT required.
+# Browser site rules may cause macOS to ask once for Automation permission when
+# ACOS first reads Chrome/Safari. Nothing here bypasses macOS security.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -83,29 +82,19 @@ launchctl load  "$PLIST"
 launchctl start com.acos.studentagent || true
 INSTALL_TS=$(python3 -c 'import time;print(int(time.time()*1000))' 2>/dev/null || date +%s000)
 
-# --- 3. Check TCC permissions (cannot be auto-granted) ---------------------
+# --- 3. Verify the installed app identity ---------------------------------
 echo
-echo "Checking macOS permissions…"
-PERM_JSON="$(/usr/local/acos/acos-agent --check-perms 2>/dev/null || echo '{}')"
-echo "$PERM_JSON" >>"$LOG"
-
-need_click=0
-if ! echo "$PERM_JSON" | grep -q '"screen_recording".*"granted": true'; then
-  need_click=1
-  echo
-  echo ">>> ACTION REQUIRED — Screen Recording is NOT granted."
-  echo "    Open: System Settings > Privacy & Security > Screen Recording"
-  echo "    Enable: ACOS Student Agent, then it will restart automatically."
-  open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture" 2>/dev/null || true
+echo "Checking ACOS Student Agent app…"
+APP="/Applications/ACOS Student Agent.app"
+AGENT="$APP/Contents/MacOS/acos-agent"
+if [[ ! -x "$AGENT" ]]; then
+  echo "ERROR: ACOS Student Agent.app is missing or invalid."
+  read -n1 -r -p "Press any key to close."; exit 1
 fi
-if ! echo "$PERM_JSON" | grep -q '"accessibility".*"granted": true'; then
-  need_click=1
-  echo
-  echo ">>> ACTION REQUIRED — Accessibility/Automation is NOT granted."
-  echo "    Open: System Settings > Privacy & Security > Accessibility"
-  echo "    Enable: ACOS Student Agent."
-  open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" 2>/dev/null || true
-fi
+echo "Student Agent app: OK"
+echo "Bundle ID: com.acos.studentagent"
+echo "Screen Recording: not required"
+echo "Browser rules: macOS may ask once for Automation permission when first used"
 PERM_TS=$(python3 -c 'import time;print(int(time.time()*1000))' 2>/dev/null || date +%s000)
 
 # --- 4. Wait briefly for Teacher Console discovery -------------------------
@@ -137,10 +126,16 @@ echo " install duration:    $((INSTALL_TS-START_TS)) ms"
 echo " permission step:     $((PERM_TS-INSTALL_TS)) ms"
 echo " console connect:     $((CONNECT_TS-PERM_TS)) ms  (connected: $CONNECTED)"
 echo "-----------------------------------------------"
-if [[ "$need_click" == "1" ]]; then
-  echo "INSTALL COMPLETE — but grant the permission(s) above ONCE, then done."
+echo
+echo "INSTALL COMPLETE"
+echo "  Student Agent: installed"
+echo "  Teacher discovery: automatic"
+echo "  Screen Recording: not required"
+if [[ "$CONNECTED" == "yes" ]]; then
+  echo "  Teacher connection: connected"
 else
-  echo "INSTALL SUCCESS ✅  Agent running and permissions OK."
+  echo "  Teacher connection: not connected yet"
+  echo "  Keep TeacherConsole.app open; the agent will continue auto-discovery."
 fi
 echo
 read -n1 -r -p "Press any key to close."
