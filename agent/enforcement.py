@@ -280,8 +280,12 @@ class Overlay:
                 self._root.deiconify()
                 self._root.lift()
                 self._root.update()
+                return True
             except Exception:
-                pass
+                self.state = "hidden"
+                return False
+        self.state = "hidden"
+        return False
 
     def policy_notice(self, message="此內容目前未開放"):
         """Non-blocking policy notice. It auto-clears when the student returns
@@ -333,8 +337,6 @@ class Overlay:
             self._label.configure(text="[teacher screen]", image="")
 
     def kiosk(self, message="Focus"):
-        # Strong FOCUS mode remains full-screen and blocking; ATTENTION is only
-        # a non-blocking banner so teachers can choose the appropriate level.
         self.state = "focus"
         if self._ensure():
             try:
@@ -345,8 +347,12 @@ class Overlay:
                 self._root.deiconify()
                 self._root.lift()
                 self._root.update()
+                return True
             except Exception:
-                pass
+                self.state = "hidden"
+                return False
+        self.state = "hidden"
+        return False
 
     def hide(self):
         """Hard teardown, not just withdraw.  A classroom release must never
