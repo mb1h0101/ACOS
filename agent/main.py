@@ -178,9 +178,10 @@ class Agent:
                 # connection established
                 connect_ms = (time.time() - t0) * 1000
                 downtime = (time.time() - self._disconnect_ts) * 1000 if self._disconnect_ts else 0
+                device_name = platform.node() or "Mac"
                 await self.send(P.msg(
                     P.T_HELLO, agent_id=self.agent_id, session_id=self.session_id,
-                    platform=platform.system(),
+                    platform=platform.system(), device_name=device_name,
                     recovered=self.recovered, prev_session_id=self.prev_session))
                 await self.event(EV.CONNECT_DURATION, {"ms": round(connect_ms, 1)})
                 await self._forward_deploy_timing()
@@ -288,18 +289,23 @@ class Agent:
         self._blocked_seen.clear()
 
     async def _apply_overlay(self, overlay, cmd_id):
-        self.overlay = overlay
+        applied = True
         if overlay == P.OVERLAY_BLACKOUT:
-            self.overlay_win.blackout()
+            applied = bool(self.overlay_win.blackout())
         elif overlay == P.OVERLAY_FOCUS_NOW:
-            # snap to learning env: quit disallowed foreground app, kiosk hold
             app = ENF.frontmost_app()
             if app and not app_allowed(app, self.policy) and self.policy.app_mode != "off":
                 ENF.terminate_app(app)
-            self.overlay_win.kiosk("請看老師")
-        elif overlay in (P.OVERLAY_NONE,):
+            applied = bool(self.overlay_win.kiosk("請看老師"))
+        elif overlay == P.OVERLAY_NONE:
             self.overlay_win.hide()
-        await self.event(EV.TEACHER_INTERVENTION, {"kind": "overlay", "overlay": overlay})
+            applied = True
+        self.overlay = overlay if applied else P.OVERLAY_NONE
+        await self.event(EV.TEACHER_INTERVENTION, {
+            "kind": "overlay", "overlay": overlay, "applied": applied
+        })
+        await self.send(P.msg(P.T_STATE, mode=self.mode, overlay=self.overlay,
+                              overlay_ok=applied, requested_overlay=overlay))
         await self._ack(cmd_id)
 
     # ---- enforcement monitor ---------------------------------------------
