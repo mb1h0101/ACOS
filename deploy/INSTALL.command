@@ -49,18 +49,29 @@ osascript -e "do shell script \"/usr/sbin/installer -pkg '$TMP_PKG' -target /\" 
 
 rm -f "$TMP_PKG"
 
-# --- 1b. Optional fixed Teacher Console address ----------------------------
-# For school networks where Bonjour/mDNS/UDP discovery is filtered, place a
-# TEACHER_CONSOLE.txt next to INSTALL.command containing e.g. 192.168.1.21:8770.
-# The same USB can then be used on every student Mac without typing commands.
+# --- 1b. Teacher Console discovery ----------------------------------------
+# Default is AUTO: do not pin a classroom to yesterday's DHCP address.
+# Student Agent discovers Teacher Console via Bonjour/mDNS, then UDP beacon.
+# Only use host:port in TEACHER_CONSOLE.txt as a deliberate fallback for a
+# school network that blocks discovery.
 TEACHER_CFG="$HERE/TEACHER_CONSOLE.txt"
+SUPPORT_DIR="$HOME/Library/Application Support/ACOS"
+mkdir -p "$SUPPORT_DIR"
 if [[ -f "$TEACHER_CFG" ]]; then
   cfg="$(tr -d '\r\n ' < "$TEACHER_CFG")"
-  if [[ "$cfg" == *:* ]]; then
-    mkdir -p "$HOME/Library/Application Support/ACOS"
-    printf '%s\n' "$cfg" > "$HOME/Library/Application Support/ACOS/console.txt"
-    echo "Teacher Console fixed address: $cfg"
-  fi
+else
+  cfg="AUTO"
+fi
+
+if [[ -z "$cfg" || "$cfg" == "AUTO" || "$cfg" == "auto" ]]; then
+  rm -f "$SUPPORT_DIR/console.txt"
+  echo "Teacher Console: automatic discovery (no fixed IP)"
+elif [[ "$cfg" == *:* ]]; then
+  printf '%s\n' "$cfg" > "$SUPPORT_DIR/console.txt"
+  echo "Teacher Console fixed fallback: $cfg"
+else
+  rm -f "$SUPPORT_DIR/console.txt"
+  echo "Teacher Console: automatic discovery (invalid fixed address ignored)"
 fi
 
 # --- 2. Load + start the LaunchAgent in the current user session -----------
