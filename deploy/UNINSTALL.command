@@ -15,6 +15,7 @@ rm -rf "$HOME/Library/Application Support/ACOS"
 rm -f /tmp/acos-agent.out.log /tmp/acos-agent.err.log
 
 # Forget the pkg receipt.
+pkgutil --forget com.acos.studentagent.pkg >/dev/null 2>&1 || true
 pkgutil --forget com.acos.studentagent >/dev/null 2>&1 || true
 
 echo "Uninstall complete."
