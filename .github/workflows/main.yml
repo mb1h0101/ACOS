@@ -31,6 +31,7 @@ jobs:
           chmod +x deploy/INSTALL.command
           chmod +x deploy/UNINSTALL.command
           chmod +x deploy/EMERGENCY_RESET.command
+          chmod +x deploy/START_TEACHER.command
 
       - name: Build StudentAgent.pkg
         run: |
@@ -70,6 +71,7 @@ jobs:
           cp deploy/TEACHER_CONSOLE.txt ACOS_USB/
           cp deploy/UNINSTALL.command ACOS_USB/
           cp deploy/EMERGENCY_RESET.command ACOS_USB/
+          cp deploy/START_TEACHER.command ACOS_USB/
           chmod +x ACOS_USB/*.command
           cp README.md ACOS_USB/README.md
           ditto -c -k --sequesterRsrc --keepParent ACOS_USB ACOS_USB.zip
