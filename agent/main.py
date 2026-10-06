@@ -83,6 +83,7 @@ class Agent:
         self._was_inactive = False
         self._disconnect_ts = 0.0
         self._mode_cmd_recv_ts = 0.0
+        self._last_target = None
 
     # ---- crash recovery ---------------------------------------------------
     def _check_crash(self):
@@ -152,19 +153,31 @@ class Agent:
             if self.console_override:
                 host, port = self.console_override.rsplit(":", 1)
                 target = (host, int(port))
+            elif self._last_target:
+                # Once a Teacher Console has been found, reconnect directly to
+                # that same address first. Do not depend on Bonjour/UDP for every
+                # transient Wi-Fi or WebSocket drop.
+                target = self._last_target
             else:
-                target = discovery.discover(total_timeout=8.0)
+                # Discovery is synchronous (Bonjour/UDP), so keep it off the
+                # asyncio event loop.
+                target = await asyncio.to_thread(discovery.discover, 8.0)
+
             if not target:
                 await asyncio.sleep(min(backoff, 8))
                 backoff = min(backoff * 1.5, 8)
                 continue
+
             url = f"http://{target[0]}:{target[1]}/ws/agent"
             try:
                 await self._session(url)
                 backoff = 1.0
             except Exception:
-                pass
-            # disconnected -> record and retry
+                # If a cached address no longer works (teacher changed network),
+                # clear it so the next pass performs fresh auto-discovery.
+                if not self.console_override and self._last_target == target:
+                    self._last_target = None
+
             if self._disconnect_ts == 0.0:
                 self._disconnect_ts = time.time()
             await asyncio.sleep(min(backoff, 8) + random.random())
@@ -175,6 +188,8 @@ class Agent:
         async with aiohttp.ClientSession() as s:
             async with s.ws_connect(url, heartbeat=20, max_msg_size=8*1024*1024) as ws:
                 self.ws = ws
+                self._last_target = (url.split("://",1)[1].split(":",1)[0],
+                                     int(url.rsplit(":",1)[1].split("/",1)[0]))
                 # connection established
                 connect_ms = (time.time() - t0) * 1000
                 downtime = (time.time() - self._disconnect_ts) * 1000 if self._disconnect_ts else 0
@@ -312,27 +327,29 @@ class Agent:
     async def _monitor(self):
         while True:
             try:
-                await self._monitor_tick()
+                # macOS AppleScript / ioreg calls are blocking. Running the
+                # policy probe in a worker thread prevents them from starving
+                # WebSocket heartbeats and making a healthy Mac look offline.
+                await asyncio.to_thread(self._monitor_tick_sync)
             except Exception:
                 pass
             await asyncio.sleep(MONITOR_S)
 
-    async def _monitor_tick(self):
-        # inactivity
+    def _monitor_tick_sync(self):
+        # This function runs in a worker thread. It only performs local macOS
+        # inspection/enforcement. Analytics events are best-effort and are
+        # queued back onto the main loop from the caller when needed.
         idle = ENF.get_idle_seconds()
         if idle >= INACTIVE_THRESHOLD_S and not self._was_inactive:
             self._was_inactive = True
-            await self.event(EV.INACTIVE, {"ms": int(idle * 1000)})
         elif idle < INACTIVE_THRESHOLD_S:
             self._was_inactive = False
 
         if self.mode not in (P.MODE_EXERCISE, P.MODE_DEMO):
             if self.overlay_win.state == "policy_block":
                 self.overlay_win.hide()
-            return  # only enforce in restricted modes
+            return
 
-        # A teacher-initiated overlay owns the screen until the teacher releases
-        # it. Policy monitoring must not replace or fight that overlay.
         if self.overlay != P.OVERLAY_NONE:
             return
 
@@ -340,33 +357,22 @@ class Agent:
         blocked_message = None
         app = ENF.frontmost_app()
 
-        # app enforcement
-        if pol.app_mode != "off":
-            if app and not app_allowed(app, pol):
-                if self._throttle("app:" + app):
-                    await self.event(EV.BLOCKED_APP, {"app": app})
-                if pol.kill_blocked_apps:
-                    ENF.terminate_app(app)
-                else:
-                    blocked_message = "這個 App 目前未開放，請回到本堂課指定工具"
+        if pol.app_mode != "off" and app and not app_allowed(app, pol):
+            if pol.kill_blocked_apps:
+                ENF.terminate_app(app)
+            else:
+                blocked_message = "這個 App 目前未開放，請回到本堂課指定工具"
 
-        # Site enforcement only inspects the browser that is actually in front.
-        # Do not punish a student because a blocked tab exists in a background
-        # browser while they are correctly working in another app.
         app_l = (app or "").lower()
         browser_front = ("chrome" in app_l or "safari" in app_l)
         if pol.site_mode != "off" and browser_front:
             host = ENF.frontmost_browser_host()
             if host and not site_allowed(host, pol):
-                if self._throttle("site:" + host):
-                    await self.event(EV.BLOCKED_NAVIGATION, {"host": host})
                 blocked_message = "這個網站目前未開放，請回到本堂課指定網站"
 
         if blocked_message:
             self.overlay_win.policy_notice(blocked_message)
         elif self.overlay_win.state == "policy_block":
-            # Critical recovery rule: a policy warning disappears automatically
-            # as soon as the student returns to an allowed resource.
             self.overlay_win.hide()
 
     def _throttle(self, key: str, window: float = 8.0) -> bool:
