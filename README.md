@@ -2,8 +2,10 @@
 
 A self-contained classroom orchestration system for macOS computer labs:
 **one Teacher Console** driving **~40 Student Agents** over the local network.
-No dependency on 金偉 (Jinwei) or any third-party broadcast suite — ACOS
-implements its own broadcast, blackout, monitoring and policy enforcement.
+
+Classroom v0.2 focuses on resource rules + reversible teacher attention. Student
+screen thumbnails and teacher-screen Broadcast are intentionally not part of
+the normal classroom UI.
 
 > **Status: first deployable version.** The networking, protocol, analytics,
 > policy engine, console UI, agent lifecycle (heartbeat / reconnect / crash
@@ -23,16 +25,15 @@ A single Traditional-Chinese web console served locally by
 
 The normal classroom workflow is deliberately small:
 
-1. set the websites/apps allowed for this lesson;
-2. press **請全班看老師** when the teacher needs attention;
-3. press the same control (**讓學生繼續操作**) to return students to the
-   existing work state;
-4. use **結束課堂／解除全部限制** as the guaranteed release.
+1. choose website rule: allow-list, block-list, or no restriction;
+2. choose App rule independently;
+3. apply to the class;
+4. use **請全班看老師 / 讓學生繼續操作** when attention is needed;
+5. use **結束課堂／解除全部限制** as the guaranteed release.
 
-The backend still contains earlier experimental mode/analytics/lesson APIs for
-compatibility, but they are intentionally not exposed as a wall of controls in
-the classroom UI. See `docs/ACOS_CLASSROOM_V02_HANDOFF.md` for the design and
-real-Mac acceptance test.
+StudentAgent.pkg installs **ACOS Student Agent.app** with stable bundle ID
+`com.acos.studentagent`. Screen Recording is not required in v0.2. See
+`docs/ACOS_CLASSROOM_V02_HANDOFF.md` for the real-Mac acceptance test.
 
 ## Repository layout
 ```
