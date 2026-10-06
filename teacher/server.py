@@ -40,7 +40,7 @@ from common.discovery import ConsoleAdvertiser
 from teacher.analytics import Analytics
 from teacher.policy import Policy, default_policies
 
-HEARTBEAT_TIMEOUT_S = 12  # mark offline if no heartbeat within this window
+HEARTBEAT_TIMEOUT_S = 24  # tolerate brief macOS/UI stalls without false offline
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 
@@ -489,6 +489,14 @@ def make_app(console: Console) -> web.Application:
                 if not P.validate(m):
                     continue
                 t = m.get("type")
+
+                # Any valid message proves the agent is alive. Do not rely only
+                # on a dedicated heartbeat packet for online/offline state.
+                if conn is not None:
+                    conn.last_seen = time.time()
+                    if not conn.online:
+                        conn.online = True
+                        await console.push_state()
 
                 if t == P.T_HELLO:
                     aid = m.get("agent_id") or P.uuid.uuid4().hex[:12]
