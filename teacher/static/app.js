@@ -82,24 +82,32 @@ const lines=v=>v.split('\n').map(x=>x.trim()).filter(Boolean);
 async function loadSetup(){
   const s=await (await fetch('/api/state')).json();
   const p=(s.policies&&s.policies.EXERCISE)||{};
-  $('#site_allow').value=(p.site_allow||[]).join('\n');
-  $('#app_allow').value=(p.app_allow||[]).join('\n');
+  $('#site_mode').value=p.site_mode||'off';
+  $('#site_list').value=(p.site_mode==='blocklist'?(p.site_block||[]):(p.site_allow||[])).join('\n');
+  $('#app_mode').value=p.app_mode||'off';
+  $('#app_list').value=(p.app_mode==='blocklist'?(p.app_block||[]):(p.app_allow||[])).join('\n');
   $('#teachertest').checked=!!s.allow_teacher_test;
 }
 
 $('#apply').onclick=async()=>{
-  const sites=lines($('#site_allow').value), apps=lines($('#app_allow').value);
+  const siteMode=$('#site_mode').value;
+  const appMode=$('#app_mode').value;
+  const sites=lines($('#site_list').value), apps=lines($('#app_list').value);
   $('#apply').disabled=true;
   $('#applymsg').textContent='套用中…';
   try{
     await command({action:'set_policy',mode:'EXERCISE',patch:{
-      site_mode:sites.length?'allowlist':'off',site_allow:sites,site_block:[],
-      app_mode:apps.length?'allowlist':'off',app_allow:apps,app_block:[],
+      site_mode:siteMode,
+      site_allow:siteMode==='allowlist'?sites:[],
+      site_block:siteMode==='blocklist'?sites:[],
+      app_mode:appMode,
+      app_allow:appMode==='allowlist'?apps:[],
+      app_block:appMode==='blocklist'?apps:[],
       fullscreen:false,kill_blocked_apps:false
     },targets:'all'});
     await command({action:'set_mode',mode:'EXERCISE',targets:'all'});
     await command({action:'set_overlay',overlay:'NONE',targets:'all'});
-    $('#applymsg').textContent='已套用。學生可在上述範圍內操作，其他未允許資源會被阻擋。';
+    $('#applymsg').textContent='已套用到全班。';
   }catch(e){
     $('#applymsg').textContent='套用失敗，請確認學生端是否在線。';
   }finally{
