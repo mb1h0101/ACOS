@@ -72,6 +72,11 @@ jobs:
           cp deploy/UNINSTALL.command ACOS_USB/
           cp deploy/EMERGENCY_RESET.command ACOS_USB/
           cp deploy/START_TEACHER.command ACOS_USB/
+          mkdir -p "ACOS_USB/ACOS Installer.app/Contents/MacOS"
+          cp "deploy/installer_app/Contents/MacOS/ACOS Installer" "ACOS_USB/ACOS Installer.app/Contents/MacOS/"
+          cp "deploy/installer_app/Contents/Info.plist" "ACOS_USB/ACOS Installer.app/Contents/"
+          chmod +x "ACOS_USB/ACOS Installer.app/Contents/MacOS/ACOS Installer"
+          codesign --deep --force --sign - "ACOS_USB/ACOS Installer.app"
           chmod +x ACOS_USB/*.command
           cp README.md ACOS_USB/README.md
           cp deploy/README_FIRST.txt ACOS_USB/
