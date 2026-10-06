@@ -261,11 +261,7 @@ class Overlay:
         return True
 
     def blackout(self, message="請看老師這裡"):
-        """
-        ATTENTION mode: a very visible top banner, not a full-screen lock.
-        Students can keep their current app/game state; the teacher can use
-        FOCUS NOW separately when interaction must actually be restricted.
-        """
+        """Teacher attention banner (non-blocking)."""
         self.state = "attention"
         if self._ensure():
             try:
@@ -280,6 +276,35 @@ class Overlay:
                     bg="#111111",
                     fg="white",
                     font=("Helvetica", 42, "bold"),
+                )
+                self._root.deiconify()
+                self._root.lift()
+                self._root.update()
+                return True
+            except Exception:
+                self.state = "hidden"
+                return False
+        self.state = "hidden"
+        return False
+
+    def policy_notice(self, message="此內容目前未開放"):
+        """Non-blocking policy notice. It auto-clears when the student returns
+        to an allowed resource; unlike teacher attention/focus it must never
+        become a sticky classroom state."""
+        self.state = "policy_block"
+        if self._ensure():
+            try:
+                sw = self._root.winfo_screenwidth()
+                h = 150
+                self._root.attributes("-fullscreen", False)
+                self._root.geometry(f"{sw}x{h}+0+0")
+                self._root.configure(bg="#111111")
+                self._label.configure(
+                    text=f"⚠  {message}",
+                    image="",
+                    bg="#111111",
+                    fg="white",
+                    font=("Helvetica", 34, "bold"),
                 )
                 self._root.deiconify()
                 self._root.lift()
@@ -312,8 +337,6 @@ class Overlay:
             self._label.configure(text="[teacher screen]", image="")
 
     def kiosk(self, message="Focus"):
-        # Strong FOCUS mode remains full-screen and blocking; ATTENTION is only
-        # a non-blocking banner so teachers can choose the appropriate level.
         self.state = "focus"
         if self._ensure():
             try:
@@ -324,17 +347,25 @@ class Overlay:
                 self._root.deiconify()
                 self._root.lift()
                 self._root.update()
+                return True
             except Exception:
-                pass
+                self.state = "hidden"
+                return False
+        self.state = "hidden"
+        return False
 
     def hide(self):
+        """Hard teardown, not just withdraw.  A classroom release must never
+        leave a stale fullscreen/topmost Tk window behind."""
         self.state = "hidden"
         if self._root is not None:
             try:
-                self._root.withdraw()
-                self._root.update()
+                self._root.destroy()
             except Exception:
                 pass
+            finally:
+                self._root = None
+                self._label = None
 
 
 # ---------------------------------------------------------------------------

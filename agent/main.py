@@ -83,6 +83,7 @@ class Agent:
         self._was_inactive = False
         self._disconnect_ts = 0.0
         self._mode_cmd_recv_ts = 0.0
+        self._last_target = None
 
     # ---- crash recovery ---------------------------------------------------
     def _check_crash(self):
@@ -152,19 +153,31 @@ class Agent:
             if self.console_override:
                 host, port = self.console_override.rsplit(":", 1)
                 target = (host, int(port))
+            elif self._last_target:
+                # Once a Teacher Console has been found, reconnect directly to
+                # that same address first. Do not depend on Bonjour/UDP for every
+                # transient Wi-Fi or WebSocket drop.
+                target = self._last_target
             else:
-                target = discovery.discover(total_timeout=8.0)
+                # Discovery is synchronous (Bonjour/UDP), so keep it off the
+                # asyncio event loop.
+                target = await asyncio.to_thread(discovery.discover, 8.0)
+
             if not target:
                 await asyncio.sleep(min(backoff, 8))
                 backoff = min(backoff * 1.5, 8)
                 continue
+
             url = f"http://{target[0]}:{target[1]}/ws/agent"
             try:
                 await self._session(url)
                 backoff = 1.0
             except Exception:
-                pass
-            # disconnected -> record and retry
+                # If a cached address no longer works (teacher changed network),
+                # clear it so the next pass performs fresh auto-discovery.
+                if not self.console_override and self._last_target == target:
+                    self._last_target = None
+
             if self._disconnect_ts == 0.0:
                 self._disconnect_ts = time.time()
             await asyncio.sleep(min(backoff, 8) + random.random())
@@ -175,12 +188,15 @@ class Agent:
         async with aiohttp.ClientSession() as s:
             async with s.ws_connect(url, heartbeat=20, max_msg_size=8*1024*1024) as ws:
                 self.ws = ws
+                self._last_target = (url.split("://",1)[1].split(":",1)[0],
+                                     int(url.rsplit(":",1)[1].split("/",1)[0]))
                 # connection established
                 connect_ms = (time.time() - t0) * 1000
                 downtime = (time.time() - self._disconnect_ts) * 1000 if self._disconnect_ts else 0
+                device_name = platform.node() or "Mac"
                 await self.send(P.msg(
                     P.T_HELLO, agent_id=self.agent_id, session_id=self.session_id,
-                    platform=platform.system(),
+                    platform=platform.system(), device_name=device_name,
                     recovered=self.recovered, prev_session_id=self.prev_session))
                 await self.event(EV.CONNECT_DURATION, {"ms": round(connect_ms, 1)})
                 await self._forward_deploy_timing()
@@ -225,6 +241,7 @@ class Agent:
         t = m.get("type")
         if t == P.T_WELCOME:
             self.agent_id = m.get("agent_id", self.agent_id)
+            print("[ACOS agent] connected to Teacher Console", flush=True)
             await self._apply_mode(m.get("class_mode", P.MODE_FREE),
                                    m.get("policy"), cmd_id=None)
         elif t == P.T_SET_MODE:
@@ -287,59 +304,76 @@ class Agent:
         self._blocked_seen.clear()
 
     async def _apply_overlay(self, overlay, cmd_id):
-        self.overlay = overlay
+        applied = True
         if overlay == P.OVERLAY_BLACKOUT:
-            self.overlay_win.blackout()
+            applied = bool(self.overlay_win.blackout())
         elif overlay == P.OVERLAY_FOCUS_NOW:
-            # snap to learning env: quit disallowed foreground app, kiosk hold
             app = ENF.frontmost_app()
             if app and not app_allowed(app, self.policy) and self.policy.app_mode != "off":
                 ENF.terminate_app(app)
-            self.overlay_win.kiosk("Focus now")
-        elif overlay in (P.OVERLAY_NONE,):
+            applied = bool(self.overlay_win.kiosk("請看老師"))
+        elif overlay == P.OVERLAY_NONE:
             self.overlay_win.hide()
-        await self.event(EV.TEACHER_INTERVENTION, {"kind": "overlay", "overlay": overlay})
+            applied = True
+        self.overlay = overlay if applied else P.OVERLAY_NONE
+        await self.event(EV.TEACHER_INTERVENTION, {
+            "kind": "overlay", "overlay": overlay, "applied": applied
+        })
+        await self.send(P.msg(P.T_STATE, mode=self.mode, overlay=self.overlay,
+                              overlay_ok=applied, requested_overlay=overlay))
         await self._ack(cmd_id)
 
     # ---- enforcement monitor ---------------------------------------------
     async def _monitor(self):
         while True:
             try:
-                await self._monitor_tick()
+                # macOS AppleScript / ioreg calls are blocking. Running the
+                # policy probe in a worker thread prevents them from starving
+                # WebSocket heartbeats and making a healthy Mac look offline.
+                await asyncio.to_thread(self._monitor_tick_sync)
             except Exception:
                 pass
             await asyncio.sleep(MONITOR_S)
 
-    async def _monitor_tick(self):
-        # inactivity
+    def _monitor_tick_sync(self):
+        # This function runs in a worker thread. It only performs local macOS
+        # inspection/enforcement. Analytics events are best-effort and are
+        # queued back onto the main loop from the caller when needed.
         idle = ENF.get_idle_seconds()
         if idle >= INACTIVE_THRESHOLD_S and not self._was_inactive:
             self._was_inactive = True
-            await self.event(EV.INACTIVE, {"ms": int(idle * 1000)})
         elif idle < INACTIVE_THRESHOLD_S:
             self._was_inactive = False
 
         if self.mode not in (P.MODE_EXERCISE, P.MODE_DEMO):
-            return  # only enforce in restricted modes
+            if self.overlay_win.state == "policy_block":
+                self.overlay_win.hide()
+            return
+
+        if self.overlay != P.OVERLAY_NONE:
+            return
 
         pol = self.policy
-        # app enforcement
-        if pol.app_mode != "off":
-            app = ENF.frontmost_app()
-            if app and not app_allowed(app, pol):
-                if self._throttle("app:" + app):
-                    await self.event(EV.BLOCKED_APP, {"app": app})
-                if pol.kill_blocked_apps:
-                    ENF.terminate_app(app)
-                else:
-                    self.overlay_win.blackout("This app is blocked during class")
-        # site enforcement
-        if pol.site_mode != "off":
+        blocked_message = None
+        app = ENF.frontmost_app()
+
+        if pol.app_mode != "off" and app and not app_allowed(app, pol):
+            if pol.kill_blocked_apps:
+                ENF.terminate_app(app)
+            else:
+                blocked_message = "這個 App 目前未開放，請回到本堂課指定工具"
+
+        app_l = (app or "").lower()
+        browser_front = ("chrome" in app_l or "safari" in app_l)
+        if pol.site_mode != "off" and browser_front:
             host = ENF.frontmost_browser_host()
             if host and not site_allowed(host, pol):
-                if self._throttle("site:" + host):
-                    await self.event(EV.BLOCKED_NAVIGATION, {"host": host})
-                self.overlay_win.blackout("This site is blocked during class")
+                blocked_message = "這個網站目前未開放，請回到本堂課指定網站"
+
+        if blocked_message:
+            self.overlay_win.policy_notice(blocked_message)
+        elif self.overlay_win.state == "policy_block":
+            self.overlay_win.hide()
 
     def _throttle(self, key: str, window: float = 8.0) -> bool:
         now = time.time()

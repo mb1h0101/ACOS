@@ -9,11 +9,11 @@
   <!-- The pkg installs the self-contained agent binary here. -->
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/local/acos/acos-agent</string>
+    <string>/Applications/ACOS Student Agent.app/Contents/MacOS/acos-agent</string>
   </array>
 
   <!-- Run in the logged-in user's GUI session: required so the agent can
-       screen-capture, read the frontmost app, and show the overlay. This is
+       read the current classroom context and show the overlay. This is
        a LaunchAgent (per-user), NOT a LaunchDaemon (root), by design. -->
   <key>RunAtLoad</key>
   <true/>

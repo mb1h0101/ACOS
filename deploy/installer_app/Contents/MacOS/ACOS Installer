@@ -1,0 +1,14 @@
+#!/bin/bash
+set -euo pipefail
+APP_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+USB_DIR="$(cd "$APP_DIR/.." && pwd)"
+SCRIPT="$USB_DIR/INSTALL.command"
+
+if [[ ! -f "$SCRIPT" ]]; then
+  osascript -e 'display alert "ACOS Installer" message "找不到 INSTALL.command，請確認 ACOS Installer.app 位於 ACOS_USB 資料夾內。"'
+  exit 1
+fi
+
+# Run the existing installer logic from a real .app entry point so Finder does
+# not need to execute the .command file directly.
+open -a Terminal "$SCRIPT"
