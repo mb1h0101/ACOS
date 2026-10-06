@@ -10,7 +10,7 @@
 <header class="top">
   <div>
     <div class="brand">ACOS <span>宏仁教室控制</span></div>
-    <div class="sub">學生在本堂允許的數位資源內操作；老師需要說明時，只要暫時把全班注意力拉回來。</div>
+    <div class="sub">設定本堂課的網站與 App 使用規則。</div>
   </div>
   <div class="status">
     <span id="conn" class="pill">連線中…</span>
@@ -20,17 +20,29 @@
 
 <main class="layout">
   <section class="card setup">
-    <div class="step">1</div>
     <div class="content">
-      <h2>設定這堂課可以用什麼</h2>
-      <p class="hint">只填你這堂課會用到的網站或 App。留白代表該類不限制。</p>
+      <h2>本堂課使用規則</h2>
 
-      <label>允許的網站 <span>一行一個網域</span>
-        <textarea id="site_allow" rows="4" placeholder="例如：quizizz.com&#10;classroom.google.com"></textarea>
+      <label>網站規則
+        <select id="site_mode">
+          <option value="allowlist">只允許清單內網站</option>
+          <option value="blocklist">只封鎖清單內網站</option>
+          <option value="off">網站不限制</option>
+        </select>
+      </label>
+      <label>網站清單 <span>一行一個網域</span>
+        <textarea id="site_list" rows="4" placeholder="例如：youtube.com&#10;quizizz.com"></textarea>
       </label>
 
-      <label>允許的 App <span>一行一個名稱</span>
-        <textarea id="app_allow" rows="3" placeholder="例如：Google Chrome&#10;Pages"></textarea>
+      <label>App 規則
+        <select id="app_mode">
+          <option value="allowlist">只允許清單內 App</option>
+          <option value="blocklist">只封鎖清單內 App</option>
+          <option value="off">App 不限制</option>
+        </select>
+      </label>
+      <label>App 清單 <span>一行一個名稱</span>
+        <textarea id="app_list" rows="3" placeholder="例如：Google Chrome&#10;Messages"></textarea>
       </label>
 
       <button id="apply" class="primary">套用到全班</button>
@@ -39,7 +51,6 @@
   </section>
 
   <section class="card control">
-    <div class="step">2</div>
     <div class="content">
       <h2>上課中，只需要這一個控制</h2>
       <p id="controlhint" class="hint">學生目前可以在你設定的範圍內操作。</p>
