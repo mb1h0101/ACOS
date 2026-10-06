@@ -40,8 +40,12 @@ function renderState(m){
       grid.appendChild(el);
     }
     el.className='tile'+(!a.online?' offline':'')+(a.protected_from_classroom?' teacher':'');
-    el.querySelector('.name').textContent=a.protected_from_classroom?'教師機（受保護）':'學生 '+a.agent_id.slice(-4);
-    const state=!a.online?'離線':a.overlay==='FOCUS_NOW'?'正在看老師':a.mode==='FREE'?'未套用課堂限制':'課堂中';
+    const device=a.device_name||('學生 '+a.agent_id.slice(-4));
+    el.querySelector('.name').textContent=a.protected_from_classroom?'教師機（受保護）':device;
+    const state=!a.online?'離線':
+      a.overlay_ok===false?'「請看老師」未顯示':
+      a.overlay==='FOCUS_NOW'?'已顯示「請看老師」':
+      a.mode==='FREE'?'未套用課堂限制':'課堂中';
     el.querySelector('.meta').innerHTML=`<span class="dot ${a.online?'on':''}"></span>${state}`;
   });
   document.querySelectorAll('.tile').forEach(el=>{
