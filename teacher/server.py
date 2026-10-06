@@ -58,6 +58,8 @@ class AgentConn:
         self.last_thumb_b64: Optional[str] = None
         self.last_thumb_ts: float = 0.0
         self.platform: str = "?"
+        self.device_name: str = ""
+        self.overlay_ok: Optional[bool] = None
         self.protected_from_classroom: bool = False
         self.pending: Dict[str, dict] = {}  # cmd_id -> {"ts":, "cmd":}
         self.thumb_reqs: Dict[str, float] = {}  # req_id -> send ts
@@ -73,6 +75,8 @@ class AgentConn:
             "online": self.online,
             "ip": self.ip,
             "platform": self.platform,
+            "device_name": self.device_name,
+            "overlay_ok": self.overlay_ok,
             "protected_from_classroom": self.protected_from_classroom,
             "last_thumb_ts": int(self.last_thumb_ts * 1000),
             "age": round(time.time() - self.last_seen, 1),
@@ -322,9 +326,9 @@ class Console:
         for a in self._targets(targets):
             cmd_id = P.uuid.uuid4().hex[:12]
             a.pending[cmd_id] = {"ts": time.time(), "cmd": "set_overlay"}
+            a.overlay_ok = None
             await self.send_agent(a, P.msg(P.T_SET_OVERLAY, cmd_id=cmd_id,
                                            overlay=overlay))
-            a.overlay = overlay
         self.analytics.record("_teacher", EV.TEACHER_INTERVENTION,
                               {"kind": "overlay", "overlay": overlay})
         await self.push_state()
@@ -495,6 +499,7 @@ def make_app(console: Console) -> web.Application:
                     conn.last_seen = time.time()
                     conn.session_id = m.get("session_id", "")
                     conn.platform = m.get("platform", "?")
+                    conn.device_name = m.get("device_name", "")
                     # If StudentAgent is also installed on the Teacher Mac,
                     # keep it immune from classroom commands by default.
                     sockname = request.transport.get_extra_info("sockname")
@@ -565,6 +570,8 @@ def make_app(console: Console) -> web.Application:
                 elif t == P.T_STATE:
                     conn.mode = m.get("mode", conn.mode)
                     conn.overlay = m.get("overlay", conn.overlay)
+                    if "overlay_ok" in m:
+                        conn.overlay_ok = bool(m.get("overlay_ok"))
                     # broadcast frame ack (latency)
                     fid = m.get("bcast_ack")
                     if fid:
