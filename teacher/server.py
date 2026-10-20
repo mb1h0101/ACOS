@@ -40,7 +40,7 @@ from common.discovery import ConsoleAdvertiser
 from teacher.analytics import Analytics
 from teacher.policy import Policy, default_policies
 
-HEARTBEAT_TIMEOUT_S = 12  # mark offline if no heartbeat within this window
+HEARTBEAT_TIMEOUT_S = 24  # tolerate brief macOS/UI stalls without false offline
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 
@@ -58,6 +58,9 @@ class AgentConn:
         self.last_thumb_b64: Optional[str] = None
         self.last_thumb_ts: float = 0.0
         self.platform: str = "?"
+        self.device_name: str = ""
+        self.overlay_ok: Optional[bool] = None
+        self.protected_from_classroom: bool = False
         self.pending: Dict[str, dict] = {}  # cmd_id -> {"ts":, "cmd":}
         self.thumb_reqs: Dict[str, float] = {}  # req_id -> send ts
         self.bcast_sent: Dict[str, float] = {}  # frame_id -> send ts
@@ -72,6 +75,9 @@ class AgentConn:
             "online": self.online,
             "ip": self.ip,
             "platform": self.platform,
+            "device_name": self.device_name,
+            "overlay_ok": self.overlay_ok,
+            "protected_from_classroom": self.protected_from_classroom,
             "last_thumb_ts": int(self.last_thumb_ts * 1000),
             "age": round(time.time() - self.last_seen, 1),
         }
@@ -95,6 +101,9 @@ class Console:
         self.lesson_path = os.path.expanduser("~/ACOS/lesson.json")
         self.lesson = self._load_lesson()
         self.lesson_progress: Dict[str, dict] = {}
+        # The Mac running Teacher Console is protected from classroom commands
+        # by default.  It can be deliberately included only for local testing.
+        self.allow_teacher_test: bool = False
 
     # ---- lesson / adaptive reward -----------------------------------------
     def _load_lesson(self) -> dict:
@@ -238,13 +247,15 @@ class Console:
                 self.console_ws.remove(ws)
 
     async def push_state(self):
+        students = [a for a in self.agents.values() if not a.protected_from_classroom]
         await self.push_console({
             "type": "state",
             "class_mode": self.class_mode,
             "reward_remaining": max(0, int(self.reward_ends_at - time.time())) if self.reward_ends_at else 0,
             "agents": [a.public() for a in self.agents.values()],
-            "online": sum(1 for a in self.agents.values() if a.online),
-            "total": len(self.agents),
+            "online": sum(1 for a in students if a.online),
+            "total": len(students),
+            "allow_teacher_test": self.allow_teacher_test,
         })
 
     # ---- send to agents ---------------------------------------------------
@@ -256,10 +267,35 @@ class Console:
 
     def _targets(self, targets) -> List[AgentConn]:
         if targets in (None, "all", ["all"]):
-            return list(self.agents.values())
-        if isinstance(targets, str):
-            targets = [targets]
-        return [self.agents[t] for t in targets if t in self.agents]
+            selected = list(self.agents.values())
+        else:
+            if isinstance(targets, str):
+                targets = [targets]
+            selected = [self.agents[t] for t in targets if t in self.agents]
+        if not self.allow_teacher_test:
+            selected = [a for a in selected if not a.protected_from_classroom]
+        return selected
+
+    async def cmd_restore_all(self, targets="all"):
+        """Release selected students (or the whole class) back to FREE."""
+        if targets in (None, "all", ["all"]):
+            await self._cancel_reward()
+        for a in self._targets(targets):
+            cmd_id = P.uuid.uuid4().hex[:12]
+            pol = self.policies.get(P.MODE_FREE, Policy(mode=P.MODE_FREE)).to_dict()
+            a.pending[cmd_id] = {"ts": time.time(), "cmd": "restore_all"}
+            await self.send_agent(a, P.msg(P.T_SET_MODE, cmd_id=cmd_id,
+                                           mode=P.MODE_FREE, policy=pol))
+            await self.send_agent(a, P.msg(P.T_SET_OVERLAY,
+                                           cmd_id=P.uuid.uuid4().hex[:12],
+                                           overlay=P.OVERLAY_NONE))
+            a.mode = P.MODE_FREE
+            a.overlay = P.OVERLAY_NONE
+        if targets in (None, "all", ["all"]):
+            self.class_mode = P.MODE_FREE
+        self.analytics.record("_teacher", EV.TEACHER_INTERVENTION,
+                              {"kind": "restore", "targets": targets})
+        await self.push_state()
 
     async def cmd_set_mode(self, mode: str, targets=None, reward_seconds: int = 0):
         if mode not in P.MODES:
@@ -291,20 +327,21 @@ class Console:
         for a in self._targets(targets):
             cmd_id = P.uuid.uuid4().hex[:12]
             a.pending[cmd_id] = {"ts": time.time(), "cmd": "set_overlay"}
+            a.overlay_ok = None
             await self.send_agent(a, P.msg(P.T_SET_OVERLAY, cmd_id=cmd_id,
                                            overlay=overlay))
-            a.overlay = overlay
         self.analytics.record("_teacher", EV.TEACHER_INTERVENTION,
                               {"kind": "overlay", "overlay": overlay})
         await self.push_state()
 
-    async def cmd_set_policy(self, mode: str, patch: dict):
+    async def cmd_set_policy(self, mode: str, patch: dict, targets="all"):
         base = self.policies.get(mode, Policy(mode=mode)).to_dict()
         base.update(patch)
         base["mode"] = mode
         self.policies[mode] = Policy.from_dict(base)
-        # re-push to any agent currently in that mode
-        for a in self.agents.values():
+        # Re-push only to the requested target set that is already in this mode.
+        # Others keep their currently applied policy until explicitly targeted.
+        for a in self._targets(targets):
             if a.mode == mode:
                 cmd_id = P.uuid.uuid4().hex[:12]
                 a.pending[cmd_id] = {"ts": time.time(), "cmd": "set_policy"}
@@ -454,6 +491,14 @@ def make_app(console: Console) -> web.Application:
                     continue
                 t = m.get("type")
 
+                # Any valid message proves the agent is alive. Do not rely only
+                # on a dedicated heartbeat packet for online/offline state.
+                if conn is not None:
+                    conn.last_seen = time.time()
+                    if not conn.online:
+                        conn.online = True
+                        await console.push_state()
+
                 if t == P.T_HELLO:
                     aid = m.get("agent_id") or P.uuid.uuid4().hex[:12]
                     conn = console.agents.get(aid) or AgentConn(aid, ws, ip)
@@ -463,6 +508,15 @@ def make_app(console: Console) -> web.Application:
                     conn.last_seen = time.time()
                     conn.session_id = m.get("session_id", "")
                     conn.platform = m.get("platform", "?")
+                    conn.device_name = m.get("device_name", "")
+                    # If StudentAgent is also installed on the Teacher Mac,
+                    # keep it immune from classroom commands by default.
+                    sockname = request.transport.get_extra_info("sockname")
+                    server_ip = sockname[0] if sockname else None
+                    local_ips = {"127.0.0.1", "::1", _local_ip()}
+                    if server_ip:
+                        local_ips.add(server_ip)
+                    conn.protected_from_classroom = ip in local_ips
                     conn.label = console.labels.get(aid, conn.label)
                     prev = m.get("prev_session_id")
                     console.agents[aid] = conn
@@ -470,12 +524,15 @@ def make_app(console: Console) -> web.Application:
                     if m.get("recovered") and prev:
                         console.analytics.record(conn.session_id, EV.CRASH_RECOVERY,
                                                  {"prev_session_id": prev})
+                    welcome_mode = console.class_mode
+                    if conn.protected_from_classroom and not console.allow_teacher_test:
+                        welcome_mode = P.MODE_FREE
                     await console.send_agent(conn, P.msg(
                         P.T_WELCOME, agent_id=aid,
-                        class_mode=console.class_mode,
-                        policy=console.policies.get(console.class_mode,
-                                                    Policy(mode=console.class_mode)).to_dict()))
-                    conn.mode = console.class_mode
+                        class_mode=welcome_mode,
+                        policy=console.policies.get(welcome_mode,
+                                                    Policy(mode=welcome_mode)).to_dict()))
+                    conn.mode = welcome_mode
                     await console.push_state()
 
                 elif conn is None:
@@ -522,6 +579,8 @@ def make_app(console: Console) -> web.Application:
                 elif t == P.T_STATE:
                     conn.mode = m.get("mode", conn.mode)
                     conn.overlay = m.get("overlay", conn.overlay)
+                    if "overlay_ok" in m:
+                        conn.overlay_ok = bool(m.get("overlay_ok"))
                     # broadcast frame ack (latency)
                     fid = m.get("bcast_ack")
                     if fid:
@@ -553,15 +612,17 @@ def make_app(console: Console) -> web.Application:
     # ---- REST API ---------------------------------------------------------
     async def api_state(request):
         port = request.app.get("acos_port", 8770)
+        students = [a for a in console.agents.values() if not a.protected_from_classroom]
         return web.json_response({
             "class_mode": console.class_mode,
             "reward_remaining": max(0, int(console.reward_ends_at - time.time())) if console.reward_ends_at else 0,
             "agents": [a.public() for a in console.agents.values()],
             "policies": {k: v.to_dict() for k, v in console.policies.items()},
-            "online": sum(1 for a in console.agents.values() if a.online),
-            "total": len(console.agents),
+            "online": sum(1 for a in students if a.online),
+            "total": len(students),
             "lesson": console.lesson,
             "lesson_url": f"http://{_local_ip()}:{port}/lesson",
+            "allow_teacher_test": console.allow_teacher_test,
         })
 
     async def lesson_page(request):
@@ -617,7 +678,7 @@ def make_app(console: Console) -> web.Application:
         elif action == "set_overlay":
             await console.cmd_set_overlay(body["overlay"], targets)
         elif action == "set_policy":
-            await console.cmd_set_policy(body["mode"], body.get("patch", {}))
+            await console.cmd_set_policy(body["mode"], body.get("patch", {}), targets)
         elif action == "request_thumbs":
             await console.cmd_request_thumbs(targets)
         elif action == "emergency_focus":
@@ -628,6 +689,24 @@ def make_app(console: Console) -> web.Application:
             await console.broadcast_start(targets, float(body.get("fps", 1.0)))
         elif action == "broadcast_stop":
             await console.broadcast_stop()
+        elif action == "restore_all":
+            await console.cmd_restore_all(targets)
+        elif action == "set_teacher_test":
+            console.allow_teacher_test = bool(body.get("enabled", False))
+            if not console.allow_teacher_test:
+                # Immediately release the protected local agent if it had been
+                # used for testing, so the teacher can never lock themselves out.
+                for a in console.agents.values():
+                    if a.protected_from_classroom:
+                        await console.send_agent(a, P.msg(P.T_SET_MODE,
+                            cmd_id=P.uuid.uuid4().hex[:12],
+                            mode=P.MODE_FREE,
+                            policy=console.policies.get(P.MODE_FREE, Policy(mode=P.MODE_FREE)).to_dict()))
+                        await console.send_agent(a, P.msg(P.T_SET_OVERLAY,
+                            cmd_id=P.uuid.uuid4().hex[:12], overlay=P.OVERLAY_NONE))
+                        a.mode = P.MODE_FREE
+                        a.overlay = P.OVERLAY_NONE
+            await console.push_state()
         elif action == "label":
             aid = body["agent_id"]
             console.labels[aid] = body.get("label", "")

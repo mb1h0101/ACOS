@@ -3,7 +3,7 @@ name: Build ACOS macOS artifacts
 on:
   workflow_dispatch:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main", "master", "acos-classroom-v0.2" ]
 
 jobs:
   build-macos:
@@ -31,10 +31,19 @@ jobs:
           chmod +x deploy/INSTALL.command
           chmod +x deploy/UNINSTALL.command
           chmod +x deploy/EMERGENCY_RESET.command
+          chmod +x deploy/START_TEACHER.command
 
       - name: Build StudentAgent.pkg
         run: |
           ./deploy/build_pkg.sh
+
+      - name: Verify Student Agent app bundle inside pkg
+        run: |
+          rm -rf /tmp/acos-pkg-expand
+          pkgutil --expand-full dist/StudentAgent.pkg /tmp/acos-pkg-expand
+          test -d "/tmp/acos-pkg-expand/StudentAgent-component.pkg/Payload/Applications/ACOS Student Agent.app"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "/tmp/acos-pkg-expand/StudentAgent-component.pkg/Payload/Applications/ACOS Student Agent.app/Contents/Info.plist" | grep -x "com.acos.studentagent"
+          test -x "/tmp/acos-pkg-expand/StudentAgent-component.pkg/Payload/Applications/ACOS Student Agent.app/Contents/MacOS/acos-agent"
 
       - name: Preserve StudentAgent.pkg
         run: |
@@ -62,8 +71,15 @@ jobs:
           cp deploy/TEACHER_CONSOLE.txt ACOS_USB/
           cp deploy/UNINSTALL.command ACOS_USB/
           cp deploy/EMERGENCY_RESET.command ACOS_USB/
+          cp deploy/START_TEACHER.command ACOS_USB/
+          mkdir -p "ACOS_USB/ACOS Installer.app/Contents/MacOS"
+          cp "deploy/installer_app/Contents/MacOS/ACOS Installer" "ACOS_USB/ACOS Installer.app/Contents/MacOS/"
+          cp "deploy/installer_app/Contents/Info.plist" "ACOS_USB/ACOS Installer.app/Contents/"
+          chmod +x "ACOS_USB/ACOS Installer.app/Contents/MacOS/ACOS Installer"
+          codesign --deep --force --sign - "ACOS_USB/ACOS Installer.app"
           chmod +x ACOS_USB/*.command
           cp README.md ACOS_USB/README.md
+          cp deploy/README_FIRST.txt ACOS_USB/
           ditto -c -k --sequesterRsrc --keepParent ACOS_USB ACOS_USB.zip
 
       - name: Verify required outputs

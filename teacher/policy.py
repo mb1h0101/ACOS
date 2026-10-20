@@ -72,11 +72,13 @@ def default_policies() -> Dict[str, Policy]:
     return {
         P.MODE_DEMO: Policy(mode=P.MODE_DEMO, fullscreen=True),
         P.MODE_EXERCISE: Policy(
-            mode=P.MODE_EXERCISE, site_mode="allowlist",
-            site_allow=["khanacademy.org", "wikipedia.org"],
-            app_mode="blocklist",
-            app_block=["Messages", "Games", "Steam", "Discord"],
-            fullscreen=True, kill_blocked_apps=True),
+            mode=P.MODE_EXERCISE,
+            # A teacher explicitly sets the resources for each lesson in the
+            # Console. Empty lists mean "not configured yet", not a surprise
+            # hard-coded curriculum.
+            site_mode="off", site_allow=[],
+            app_mode="off", app_allow=[],
+            fullscreen=False, kill_blocked_apps=False),
         P.MODE_REWARD: Policy(
             mode=P.MODE_REWARD, site_mode="off", app_mode="off",
             fullscreen=False),
