@@ -10,7 +10,7 @@
 <header class="top">
   <div>
     <div class="brand">ACOS <span>宏仁教室控制</span></div>
-    <div class="sub">設定本堂課的網站與 App 使用規則。</div>
+    <div class="sub">先選控制對象，再設定這堂課允許／禁止的網站與 App。</div>
   </div>
   <div class="status">
     <span id="conn" class="pill">連線中…</span>
@@ -19,32 +19,59 @@
 </header>
 
 <main class="layout">
+  <section class="card targets">
+    <div class="cardhead">
+      <div>
+        <h2>1. 選擇控制對象</h2>
+        <p class="hint">預設是全班；也可以只控制一位或幾位學生。</p>
+      </div>
+      <div class="seg">
+        <button id="scope_all" class="segbtn active">全班</button>
+        <button id="scope_selected" class="segbtn">已選學生 <span id="selected_count">0</span></button>
+      </div>
+    </div>
+    <div id="grid" class="grid"></div>
+    <div class="targetActions">
+      <button id="select_all" class="secondary">選取全部在線學生</button>
+      <button id="clear_selection" class="secondary">取消選取</button>
+      <button id="release_selected" class="dangerGhost">解除選取學生限制</button>
+    </div>
+  </section>
+
   <section class="card setup">
     <div class="content">
-      <h2>本堂課使用規則</h2>
+      <h2>2. 設定使用規則</h2>
+      <p class="hint">「只允許」＝清單外會被攔；「只封鎖」＝只有清單內會被攔。</p>
 
-      <label>網站規則
-        <select id="site_mode">
-          <option value="allowlist">只允許清單內網站</option>
-          <option value="blocklist">只封鎖清單內網站</option>
-          <option value="off">網站不限制</option>
-        </select>
-      </label>
-      <label>網站清單 <span>一行一個網域</span>
-        <textarea id="site_list" rows="4" placeholder="例如：youtube.com&#10;quizizz.com"></textarea>
-      </label>
+      <div class="rulegrid">
+        <div>
+          <label>網站規則
+            <select id="site_mode">
+              <option value="off">網站不限制</option>
+              <option value="allowlist">只允許清單內網站</option>
+              <option value="blocklist">只封鎖清單內網站</option>
+            </select>
+          </label>
+          <label>網站清單 <span>一行一個網域</span>
+            <textarea id="site_list" rows="4" placeholder="例如：youtube.com&#10;quizizz.com"></textarea>
+          </label>
+        </div>
 
-      <label>App 規則
-        <select id="app_mode">
-          <option value="allowlist">只允許清單內 App</option>
-          <option value="blocklist">只封鎖清單內 App</option>
-          <option value="off">App 不限制</option>
-        </select>
-      </label>
-      <label>App 清單 <span>一行一個名稱</span>
-        <textarea id="app_list" rows="3" placeholder="例如：Google Chrome&#10;Messages"></textarea>
-      </label>
+        <div>
+          <label>App 規則
+            <select id="app_mode">
+              <option value="off">App 不限制</option>
+              <option value="allowlist">只允許清單內 App</option>
+              <option value="blocklist">只封鎖清單內 App</option>
+            </select>
+          </label>
+          <label>App 清單 <span>一行一個名稱</span>
+            <textarea id="app_list" rows="4" placeholder="例如：Google Chrome&#10;Messages"></textarea>
+          </label>
+        </div>
+      </div>
 
+      <div id="effect" class="effect"></div>
       <button id="apply" class="primary">套用到全班</button>
       <div id="applymsg" class="result"></div>
     </div>
@@ -52,22 +79,12 @@
 
   <section class="card control">
     <div class="content">
-      <h2>上課中</h2>
-      <p id="controlhint" class="hint">學生目前可以在你設定的範圍內操作。</p>
+      <h2>3. 上課中</h2>
+      <p id="controlhint" class="hint">目前控制對象：全班。</p>
       <button id="focus" class="focus">請全班看老師</button>
       <p class="small">再按一次，學生就回到原本的網站、App 或文件繼續操作。</p>
-      <button id="restore" class="restore">結束課堂／解除全部限制</button>
+      <button id="restore" class="restore">結束課堂／解除全班限制</button>
     </div>
-  </section>
-
-  <section class="card students">
-    <div class="cardhead">
-      <div>
-        <h2>學生電腦</h2>
-        <p class="hint">只顯示連線與課堂狀態。</p>
-      </div>
-    </div>
-    <div id="grid" class="grid"></div>
   </section>
 
   <details class="card advanced">
