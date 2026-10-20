@@ -15,3 +15,5 @@ stick and reused. If the copied folder no longer carries quarantine, future Macs
 can double-click INSTALL.command directly.
 
 Do not click "Move to Trash".
+
+Rebuild marker: classroom v0.2 current package
