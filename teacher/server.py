@@ -276,11 +276,11 @@ class Console:
             selected = [a for a in selected if not a.protected_from_classroom]
         return selected
 
-    async def cmd_restore_all(self):
-        """Hard classroom release: remove overlays and return every student
-        device to FREE. Teacher-protected devices are never targeted."""
-        await self._cancel_reward()
-        for a in self._targets("all"):
+    async def cmd_restore_all(self, targets="all"):
+        """Release selected students (or the whole class) back to FREE."""
+        if targets in (None, "all", ["all"]):
+            await self._cancel_reward()
+        for a in self._targets(targets):
             cmd_id = P.uuid.uuid4().hex[:12]
             pol = self.policies.get(P.MODE_FREE, Policy(mode=P.MODE_FREE)).to_dict()
             a.pending[cmd_id] = {"ts": time.time(), "cmd": "restore_all"}
@@ -291,9 +291,10 @@ class Console:
                                            overlay=P.OVERLAY_NONE))
             a.mode = P.MODE_FREE
             a.overlay = P.OVERLAY_NONE
-        self.class_mode = P.MODE_FREE
+        if targets in (None, "all", ["all"]):
+            self.class_mode = P.MODE_FREE
         self.analytics.record("_teacher", EV.TEACHER_INTERVENTION,
-                              {"kind": "restore_all"})
+                              {"kind": "restore", "targets": targets})
         await self.push_state()
 
     async def cmd_set_mode(self, mode: str, targets=None, reward_seconds: int = 0):
@@ -333,15 +334,15 @@ class Console:
                               {"kind": "overlay", "overlay": overlay})
         await self.push_state()
 
-    async def cmd_set_policy(self, mode: str, patch: dict):
+    async def cmd_set_policy(self, mode: str, patch: dict, targets="all"):
         base = self.policies.get(mode, Policy(mode=mode)).to_dict()
         base.update(patch)
         base["mode"] = mode
         self.policies[mode] = Policy.from_dict(base)
-        # re-push to any student currently in that mode. The teacher Mac stays
-        # immune unless explicit local-test mode is enabled.
-        for a in self.agents.values():
-            if a.mode == mode and (self.allow_teacher_test or not a.protected_from_classroom):
+        # Re-push only to the requested target set that is already in this mode.
+        # Others keep their currently applied policy until explicitly targeted.
+        for a in self._targets(targets):
+            if a.mode == mode:
                 cmd_id = P.uuid.uuid4().hex[:12]
                 a.pending[cmd_id] = {"ts": time.time(), "cmd": "set_policy"}
                 await self.send_agent(a, P.msg(P.T_SET_POLICY, cmd_id=cmd_id,
@@ -677,7 +678,7 @@ def make_app(console: Console) -> web.Application:
         elif action == "set_overlay":
             await console.cmd_set_overlay(body["overlay"], targets)
         elif action == "set_policy":
-            await console.cmd_set_policy(body["mode"], body.get("patch", {}))
+            await console.cmd_set_policy(body["mode"], body.get("patch", {}), targets)
         elif action == "request_thumbs":
             await console.cmd_request_thumbs(targets)
         elif action == "emergency_focus":
@@ -689,7 +690,7 @@ def make_app(console: Console) -> web.Application:
         elif action == "broadcast_stop":
             await console.broadcast_stop()
         elif action == "restore_all":
-            await console.cmd_restore_all()
+            await console.cmd_restore_all(targets)
         elif action == "set_teacher_test":
             console.allow_teacher_test = bool(body.get("enabled", False))
             if not console.allow_teacher_test:
