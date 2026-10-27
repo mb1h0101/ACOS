@@ -2,9 +2,11 @@
 Policy model: what a mode allows.
 
 A Policy is what the console sends to agents. It is intentionally simple and
-JSON-serialisable. Host matching is suffix-based (so "khanacademy.org" also
-matches "www.khanacademy.org"). App matching is by bundle id or app name
-(case-insensitive substring).
+JSON-serialisable. Website rules are teacher-facing URL keywords matched
+case-insensitively against the student's current foreground browser host.
+Teachers may type a simple word such as "google" or paste a URL; pasted URLs
+are reduced to their host automatically. App matching is case-insensitive
+substring matching against the foreground app name.
 
 Enforcement semantics per mode are decided ENTIRELY console-side and shipped
 to the agent, so classroom behaviour is auditable and changeable without
@@ -42,16 +44,47 @@ class Policy:
                           "fullscreen", "kill_blocked_apps"]})
 
 
+def _site_keyword(value: str) -> str:
+    """Normalize teacher input into a simple host/URL keyword.
+
+    Examples:
+      google                              -> google
+      google.com                          -> google.com
+      https://classroom.google.com/u/0/h  -> classroom.google.com
+    """
+    value = (value or "").strip().lower()
+    if not value:
+        return ""
+    if "://" in value:
+        try:
+            from urllib.parse import urlparse
+            value = (urlparse(value).hostname or value).lower()
+        except Exception:
+            pass
+    value = value.split("/")[0].split("?")[0].split("#")[0]
+    return value.strip().strip(".")
+
+
 def site_allowed(host: str, pol: Policy) -> bool:
-    host = (host or "").lower().strip()
+    """Match teacher-entered keywords against the CURRENT foreground host.
+
+    This intentionally does not inspect CDN/API/iframe traffic. ACOS classroom
+    policy answers one question only: is the page the student is currently
+    looking at within the teacher's stated website rule?
+    """
+    host = (host or "").lower().strip().strip(".")
     if pol.site_mode == "off":
         return True
+
+    values = pol.site_allow if pol.site_mode == "allowlist" else pol.site_block
+    keywords = [_site_keyword(x) for x in values]
+    keywords = [x for x in keywords if x]
+    matched = any(keyword in host for keyword in keywords)
+
     if pol.site_mode == "allowlist":
-        return any(host == h or host.endswith("." + h) or host.endswith(h)
-                   for h in (x.lower() for x in pol.site_allow))
+        return matched
     if pol.site_mode == "blocklist":
-        return not any(host == h or host.endswith("." + h) or host.endswith(h)
-                       for h in (x.lower() for x in pol.site_block))
+        return not matched
     return True
 
 
