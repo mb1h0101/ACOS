@@ -82,7 +82,7 @@ function renderState(m){
 function updateEffect(){
   const sm=$('#site_mode').value, am=$('#app_mode').value;
   const text=[];
-  text.push(sm==='off'?'網站：不限制':sm==='allowlist'?'網站：只有清單內可用':'網站：清單內會被攔');
+  text.push(sm==='off'?'網站：不限制':sm==='allowlist'?'網站：只有符合關鍵字的頁面可用':'網站：符合關鍵字的頁面會被攔');
   text.push(am==='off'?'App：不限制':am==='allowlist'?'App：只有清單內可用':'App：清單內會被攔');
   $('#effect').textContent=text.join('　｜　');
 }
