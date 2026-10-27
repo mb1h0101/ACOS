@@ -1,82 +1,60 @@
-# Known Limitations & Honest Enforcement Boundary
+# Known Limitations & Classroom Boundary
 
-This document exists because your stated rule is: *if a permission cannot be
-granted legitimately by a normal installer, do not pretend it succeeded.* ACOS
-follows that rule. Here is exactly where the walls are.
+## 1. macOS permissions in classroom v0.2
 
-## 1. The three macOS permission walls
+### Screen Recording
+Not required for the current classroom workflow.
 
-### 1a. Screen Recording (TCC) — REQUIRED for thumbnails & teacher broadcast
-* Used by: student thumbnail monitoring, teacher "Broadcast my screen".
-* **Cannot be auto-granted by a pkg.** Apple's TCC requires the user to enable
-  it manually, OR an MDM-pushed **PPPC profile** to pre-approve it.
-* First-run action (per Mac): **System Settings → Privacy & Security → Screen
-  Recording → enable "ACOS Student Agent"** (and, on the teacher Mac, for
-  TeacherConsole). `INSTALL.command` detects this and opens the pane for you.
-* Until granted: thumbnails/broadcast return nothing; ACOS reports the
-  permission as **not granted** — it never reports a black/failed capture as
-  success.
+Student thumbnails and teacher-screen Broadcast were removed from the normal
+Teacher Console because the teacher can directly observe student screens in the
+physical lab and ACOS is not intended to duplicate a traditional broadcast
+suite.
 
-### 1b. Accessibility / Automation (TCC) — REQUIRED for URL detection & focus
-* Used by: reading the frontmost browser tab's host (for site enforcement),
-  bringing the learning environment to front.
-* **Cannot be auto-granted by a pkg.** Same manual grant or PPPC profile.
-* First-run action: **System Settings → Privacy & Security → Accessibility →
-  enable "ACOS Student Agent"**.
-* Until granted: app-name enforcement still works; **browser-URL** enforcement
-  is degraded (ACOS can see the app is a browser but not the tab host).
+The codebase may still contain legacy capture helpers for compatibility, but
+INSTALL.command does not ask for Screen Recording permission.
 
-### 1c. Real network-level blocking — needs MDM or a signed Network Extension
-* A packet-level content filter that a student **cannot** get around requires
-  a **NEFilterDataProvider** system extension with the
-  `com.apple.developer.networking.networkextension` entitlement (a paid Apple
-  Developer account + user/MDM approval), or an MDM web-content-filter payload.
-* ACOS v0.1 ships **soft enforcement** instead: it detects a disallowed
-  foreground app or browser host, logs `blocked_app` / `blocked_navigation`,
-  raises the BLACKOUT/kiosk overlay, and (optionally) quits the app. This is
-  effective for ordinary classroom use and is **honest about its limits**: a
-  determined student on an un-managed Mac can still reach a site between monitor
-  ticks (~1.5 s) or by using an app ACOS cannot quit.
+### Browser Automation
+Website rules read the active Chrome/Safari tab using Apple Events. macOS may
+ask once whether **ACOS Student Agent** may control/read the browser. The
+Student Agent is now a real app bundle with bundle ID
+`com.acos.studentagent`, so macOS has a stable application identity for this
+permission.
 
-> **Recommended path to hard enforcement:** enroll the lab Macs in an MDM and
-> push (a) a PPPC profile pre-approving Screen Recording + Accessibility for
-> ACOS, and (b) a web content-filter payload. With that, first-run clicks
-> disappear and site blocking becomes packet-level. ACOS is built to run
-> alongside such profiles; it does not require them to function at the soft
-> level.
+If browser Automation is denied, App rules and teacher attention still work,
+but URL-based website rules are degraded.
 
-## 2. Packaging / distribution
-* `StudentAgent.pkg` and `TeacherConsole.app` must be **signed (Developer ID)
-  and notarized** to install on other Macs without Gatekeeper warnings, and to
-  satisfy most MDM allowlists. Build scripts print the exact commands; the
-  unsigned build is for your own test Mac only.
-* The `.pkg`/`.app` are **built on a Mac** (PyInstaller). They cannot be built
-  on the Linux CI box; `build_pkg.sh` / `build_app.sh` are provided for you to
-  run once on a Mac. This is why this repo ships source + build scripts rather
-  than pre-built macOS binaries.
+## 2. Website/App enforcement
 
-## 3. Broadcast fidelity
-* Teacher broadcast is capture-and-relay of JPEG frames at ~1 fps (configurable)
-  — suitable for showing slides/steps, **not** smooth video. Higher fps
-  increases bandwidth; 40 clients × full-screen JPEG is the load ceiling to
-  watch. For motion-heavy demos, 金偉 remains a reasonable **fallback** (its
-  only sanctioned role here).
+ACOS currently uses soft classroom enforcement, not packet-level filtering.
+It checks the foreground context roughly every 1.5 seconds and responds to a
+rule violation with a policy notice (and can optionally quit blocked Apps in
+legacy/backend policy settings).
 
-## 4. Reset-on-reboot labs
-* ACOS assumes disks may revert on reboot and therefore does not persist across
-  reboots. You re-deploy each lesson from USB. The `agent_id` regenerates each
-  boot (so it is effectively per-lesson) — this is privacy-positive but means
-  seat labels must be re-applied if the image resets. (If your image is *not*
-  reset, the id and labels persist normally.)
+This is the chosen behaviour for the current classroom pilot. A determined user
+could briefly reach a site before the next check. True packet-level filtering
+would require MDM or a signed Network Extension and is outside v0.2.
 
-## 5. What is NOT yet implemented in v0.1
-* No teacher authentication on the console (assumes a trusted teacher LAN /
-  single teacher machine). Add a token before using on an open network.
-* No TLS on the LAN WebSocket (add a self-signed cert + pinning for hostile
-  networks). Fine for an isolated classroom VLAN.
-* Broadcast is one-way (teacher→students); no student-initiated screen share.
-* Learning-content task events (`task_start`, `first_attempt_accuracy`, etc.)
-  are emitted by the agent's event API — wire your actual courseware to call
-  them, or they only populate from the demo/driver.
-* Overlay hardening (hiding Dock/menu bar, blocking Cmd-Tab) is basic; a
-  hardened kiosk needs the PPPC/MDM path above.
+## 3. Packaging
+
+The student runtime is installed as:
+
+`/Applications/ACOS Student Agent.app`
+
+Bundle ID:
+
+`com.acos.studentagent`
+
+Test builds are ad-hoc signed. For broad managed deployment, Developer ID
+signing and notarization are still recommended to avoid Gatekeeper warnings.
+
+## 4. Automatic discovery
+
+Students normally use Bonjour/mDNS and UDP beacon to find TeacherConsole.app.
+If the school LAN blocks both mechanisms, a fixed address can still be placed
+in `TEACHER_CONSOLE.txt` as a fallback.
+
+## 5. Security
+
+The console currently assumes a trusted classroom LAN. There is no teacher
+authentication or TLS yet. Add those before using ACOS on an untrusted/shared
+network.

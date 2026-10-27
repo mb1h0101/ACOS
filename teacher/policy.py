@@ -2,9 +2,11 @@
 Policy model: what a mode allows.
 
 A Policy is what the console sends to agents. It is intentionally simple and
-JSON-serialisable. Host matching is suffix-based (so "khanacademy.org" also
-matches "www.khanacademy.org"). App matching is by bundle id or app name
-(case-insensitive substring).
+JSON-serialisable. Website rules are teacher-facing URL keywords matched
+case-insensitively against the student's current foreground browser host.
+Teachers may type a simple word such as "google" or paste a URL; pasted URLs
+are reduced to their host automatically. App matching is case-insensitive
+substring matching against the foreground app name.
 
 Enforcement semantics per mode are decided ENTIRELY console-side and shipped
 to the agent, so classroom behaviour is auditable and changeable without
@@ -42,16 +44,60 @@ class Policy:
                           "fullscreen", "kill_blocked_apps"]})
 
 
+def _site_keyword(value: str) -> str:
+    """Normalize teacher input into a simple host/URL keyword.
+
+    Examples:
+      google                              -> google
+      google.com                          -> google.com
+      https://classroom.google.com/u/0/h  -> classroom.google.com
+    """
+    value = (value or "").strip().lower()
+    if not value:
+        return ""
+    if "://" in value:
+        try:
+            from urllib.parse import urlparse
+            value = (urlparse(value).hostname or value).lower()
+        except Exception:
+            pass
+    value = value.split("/")[0].split("?")[0].split("#")[0]
+    return value.strip().strip(".")
+
+
+def _site_matches(host: str, rule: str) -> bool:
+    """Human-friendly but deterministic foreground-site matching.
+
+    - A plain word such as "google" matches an exact hostname label:
+      www.google.com, classroom.google.com, accounts.google.com.
+      It does NOT match unrelated strings such as notgoogle.example.
+    - A host/URL such as classroom.google.com matches that host and its
+      subdomains only.
+    This keeps the teacher out of DNS/CDN/API details because ACOS evaluates
+    only the foreground page the student is actually viewing.
+    """
+    host = (host or "").lower().strip().strip(".")
+    rule = _site_keyword(rule)
+    if not host or not rule:
+        return False
+    if "." in rule:
+        return host == rule or host.endswith("." + rule)
+    return rule in [x for x in host.split(".") if x]
+
+
 def site_allowed(host: str, pol: Policy) -> bool:
-    host = (host or "").lower().strip()
+    """Evaluate only the student's CURRENT foreground browser host."""
+    host = (host or "").lower().strip().strip(".")
     if pol.site_mode == "off":
         return True
+
+    values = pol.site_allow if pol.site_mode == "allowlist" else pol.site_block
+    matched = any(_site_matches(host, value) for value in values)
+
     if pol.site_mode == "allowlist":
-        return any(host == h or host.endswith("." + h) or host.endswith(h)
-                   for h in (x.lower() for x in pol.site_allow))
+        return matched
     if pol.site_mode == "blocklist":
-        return not any(host == h or host.endswith("." + h) or host.endswith(h)
-                       for h in (x.lower() for x in pol.site_block))
+        return not matched
     return True
 
 
@@ -72,11 +118,13 @@ def default_policies() -> Dict[str, Policy]:
     return {
         P.MODE_DEMO: Policy(mode=P.MODE_DEMO, fullscreen=True),
         P.MODE_EXERCISE: Policy(
-            mode=P.MODE_EXERCISE, site_mode="allowlist",
-            site_allow=["khanacademy.org", "wikipedia.org"],
-            app_mode="blocklist",
-            app_block=["Messages", "Games", "Steam", "Discord"],
-            fullscreen=True, kill_blocked_apps=True),
+            mode=P.MODE_EXERCISE,
+            # A teacher explicitly sets the resources for each lesson in the
+            # Console. Empty lists mean "not configured yet", not a surprise
+            # hard-coded curriculum.
+            site_mode="off", site_allow=[],
+            app_mode="off", app_allow=[],
+            fullscreen=False, kill_blocked_apps=False),
         P.MODE_REWARD: Policy(
             mode=P.MODE_REWARD, site_mode="off", app_mode="off",
             fullscreen=False),
