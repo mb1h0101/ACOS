@@ -327,37 +327,40 @@ class Agent:
     async def _monitor(self):
         while True:
             try:
-                # macOS AppleScript / ioreg calls are blocking. Running the
-                # policy probe in a worker thread prevents them from starving
-                # WebSocket heartbeats and making a healthy Mac look offline.
-                await asyncio.to_thread(self._monitor_tick_sync)
+                # Only blocking macOS probes run in a worker thread.
+                # Tk/overlay changes and websocket analytics stay on the main
+                # asyncio thread because Tk is not thread-safe on macOS.
+                probe = await asyncio.to_thread(self._probe_policy_sync)
+                await self._apply_monitor_result(probe)
             except Exception:
                 pass
             await asyncio.sleep(MONITOR_S)
 
-    def _monitor_tick_sync(self):
-        # This function runs in a worker thread. It only performs local macOS
-        # inspection/enforcement. Analytics events are best-effort and are
-        # queued back onto the main loop from the caller when needed.
+    def _probe_policy_sync(self):
+        """Perform blocking local inspection only; never touch Tk here."""
         idle = ENF.get_idle_seconds()
-        if idle >= INACTIVE_THRESHOLD_S and not self._was_inactive:
-            self._was_inactive = True
-        elif idle < INACTIVE_THRESHOLD_S:
-            self._was_inactive = False
 
         if self.mode not in (P.MODE_EXERCISE, P.MODE_DEMO):
-            if self.overlay_win.state == "policy_block":
-                self.overlay_win.hide()
-            return
+            return {
+                "idle": idle, "blocked_message": None, "blocked_kind": None,
+                "blocked_value": None, "should_clear": True,
+            }
 
         if self.overlay != P.OVERLAY_NONE:
-            return
+            return {
+                "idle": idle, "blocked_message": None, "blocked_kind": None,
+                "blocked_value": None, "should_clear": False,
+            }
 
         pol = self.policy
         blocked_message = None
+        blocked_kind = None
+        blocked_value = None
         app = ENF.frontmost_app()
 
         if pol.app_mode != "off" and app and not app_allowed(app, pol):
+            blocked_kind = "app"
+            blocked_value = app
             if pol.kill_blocked_apps:
                 ENF.terminate_app(app)
             else:
@@ -369,10 +372,37 @@ class Agent:
             host = ENF.frontmost_browser_host()
             if host and not site_allowed(host, pol):
                 blocked_message = "這個網站目前未開放，請回到本堂課指定網站"
+                blocked_kind = "site"
+                blocked_value = host
+
+        return {
+            "idle": idle,
+            "blocked_message": blocked_message,
+            "blocked_kind": blocked_kind,
+            "blocked_value": blocked_value,
+            "should_clear": blocked_message is None,
+        }
+
+    async def _apply_monitor_result(self, probe: dict):
+        idle = float(probe.get("idle", 0.0))
+        if idle >= INACTIVE_THRESHOLD_S and not self._was_inactive:
+            self._was_inactive = True
+            await self.event(EV.INACTIVE, {"seconds": round(idle, 1)})
+        elif idle < INACTIVE_THRESHOLD_S:
+            self._was_inactive = False
+
+        blocked_message = probe.get("blocked_message")
+        blocked_kind = probe.get("blocked_kind")
+        blocked_value = probe.get("blocked_value")
 
         if blocked_message:
+            # Tk stays on the main thread.
             self.overlay_win.policy_notice(blocked_message)
-        elif self.overlay_win.state == "policy_block":
+            key = f"{blocked_kind}:{blocked_value}"
+            if self._throttle(key):
+                event_kind = EV.BLOCKED_NAVIGATION if blocked_kind == "site" else EV.BLOCKED_APP
+                await self.event(event_kind, {"value": blocked_value or ""})
+        elif probe.get("should_clear") and self.overlay_win.state == "policy_block":
             self.overlay_win.hide()
 
     def _throttle(self, key: str, window: float = 8.0) -> bool:
