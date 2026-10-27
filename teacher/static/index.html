@@ -10,7 +10,7 @@
 <header class="top">
   <div>
     <div class="brand">ACOS <span>宏仁教室控制</span></div>
-    <div class="sub">先選控制對象，再設定這堂課允許／禁止的網站與 App。</div>
+    <div class="sub">先選學生，再直接輸入這堂課允許／禁止的網站關鍵字與 App。</div>
   </div>
   <div class="status">
     <span id="conn" class="pill">連線中…</span>
@@ -41,7 +41,7 @@
   <section class="card setup">
     <div class="content">
       <h2>2. 設定使用規則</h2>
-      <p class="hint">「只允許」＝清單外會被攔；「只封鎖」＝只有清單內會被攔。</p>
+      <p class="hint">不用查網域。輸入你看得懂的網址關鍵字，例如 google、youtube、quizizz。</p>
 
       <div class="rulegrid">
         <div>
@@ -52,8 +52,8 @@
               <option value="blocklist">只封鎖清單內網站</option>
             </select>
           </label>
-          <label>網站清單 <span>一行一個網域</span>
-            <textarea id="site_list" rows="4" placeholder="例如：youtube.com&#10;quizizz.com"></textarea>
+          <label>網址關鍵字 <span>一行一個；也可直接貼網址</span>
+            <textarea id="site_list" rows="4" placeholder="例如：google&#10;youtube&#10;quizizz"></textarea>
           </label>
         </div>
 
