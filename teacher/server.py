@@ -590,7 +590,9 @@ def make_app(console: Console) -> web.Application:
                             console.analytics.record(conn.session_id or conn.agent_id,
                                                      EV.BROADCAST_LATENCY, {"ms": round(ms, 1)})
         finally:
-            if conn:
+            # A reconnect can replace conn.ws before the old socket finishes.
+            # Only the socket that is still current may mark the agent offline.
+            if conn and conn.ws is ws:
                 conn.online = False
                 console.analytics.record(conn.session_id or conn.agent_id, EV.DISCONNECT)
                 await console.push_state()
