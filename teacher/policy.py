@@ -65,21 +65,34 @@ def _site_keyword(value: str) -> str:
     return value.strip().strip(".")
 
 
-def site_allowed(host: str, pol: Policy) -> bool:
-    """Match teacher-entered keywords against the CURRENT foreground host.
+def _site_matches(host: str, rule: str) -> bool:
+    """Human-friendly but deterministic foreground-site matching.
 
-    This intentionally does not inspect CDN/API/iframe traffic. ACOS classroom
-    policy answers one question only: is the page the student is currently
-    looking at within the teacher's stated website rule?
+    - A plain word such as "google" matches an exact hostname label:
+      www.google.com, classroom.google.com, accounts.google.com.
+      It does NOT match unrelated strings such as notgoogle.example.
+    - A host/URL such as classroom.google.com matches that host and its
+      subdomains only.
+    This keeps the teacher out of DNS/CDN/API details because ACOS evaluates
+    only the foreground page the student is actually viewing.
     """
+    host = (host or "").lower().strip().strip(".")
+    rule = _site_keyword(rule)
+    if not host or not rule:
+        return False
+    if "." in rule:
+        return host == rule or host.endswith("." + rule)
+    return rule in [x for x in host.split(".") if x]
+
+
+def site_allowed(host: str, pol: Policy) -> bool:
+    """Evaluate only the student's CURRENT foreground browser host."""
     host = (host or "").lower().strip().strip(".")
     if pol.site_mode == "off":
         return True
 
     values = pol.site_allow if pol.site_mode == "allowlist" else pol.site_block
-    keywords = [_site_keyword(x) for x in values]
-    keywords = [x for x in keywords if x]
-    matched = any(keyword in host for keyword in keywords)
+    matched = any(_site_matches(host, value) for value in values)
 
     if pol.site_mode == "allowlist":
         return matched
