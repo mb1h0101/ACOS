@@ -387,7 +387,7 @@ class Agent:
         idle = float(probe.get("idle", 0.0))
         if idle >= INACTIVE_THRESHOLD_S and not self._was_inactive:
             self._was_inactive = True
-            await self.event(EV.INACTIVE, {"seconds": round(idle, 1)})
+            await self.event(EV.INACTIVE, {"ms": round(idle * 1000, 1)})
         elif idle < INACTIVE_THRESHOLD_S:
             self._was_inactive = False
 
@@ -401,7 +401,7 @@ class Agent:
             key = f"{blocked_kind}:{blocked_value}"
             if self._throttle(key):
                 event_kind = EV.BLOCKED_NAVIGATION if blocked_kind == "site" else EV.BLOCKED_APP
-                await self.event(event_kind, {"value": blocked_value or ""})
+                await self.event(event_kind, {("host" if blocked_kind == "site" else "app"): blocked_value or ""})
         elif probe.get("should_clear") and self.overlay_win.state == "policy_block":
             self.overlay_win.hide()
 
