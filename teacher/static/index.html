@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ACOS 教室控制</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -10,7 +10,7 @@
 <header class="top">
   <div>
     <div class="brand">ACOS <span>宏仁教室控制</span></div>
-    <div class="sub">先選學生，再直接輸入這堂課允許／禁止的網站關鍵字與 App。</div>
+    <div class="sub">把「這一刻的教學安排」直接套用到全班、幾位學生或單一學生。</div>
   </div>
   <div class="status">
     <span id="conn" class="pill">連線中…</span>
@@ -19,84 +19,80 @@
 </header>
 
 <main class="layout">
-  <section class="card targets">
+  <section class="card">
+    <div class="step">1</div>
     <div class="cardhead">
       <div>
-        <h2>1. 選擇控制對象</h2>
-        <p class="hint">預設是全班；也可以只控制一位或幾位學生。</p>
+        <h2>這次要控制誰？</h2>
+        <p class="hint">平常直接用「全班」；需要個別處理時再點學生。</p>
       </div>
       <div class="seg">
         <button id="scope_all" class="segbtn active">全班</button>
-        <button id="scope_selected" class="segbtn">已選學生 <span id="selected_count">0</span></button>
+        <button id="scope_selected" class="segbtn">已選 <span id="selected_count">0</span> 位</button>
       </div>
     </div>
     <div id="grid" class="grid"></div>
     <div class="targetActions">
       <button id="select_all" class="secondary">選取全部在線學生</button>
       <button id="clear_selection" class="secondary">取消選取</button>
-      <button id="release_selected" class="dangerGhost">解除選取學生限制</button>
+      <button id="release_selected" class="dangerGhost">解除已選學生限制</button>
     </div>
   </section>
 
-  <section class="card setup">
-    <div class="content">
-      <h2>2. 設定使用規則</h2>
-      <p class="hint">不用查網域。輸入你看得懂的網址關鍵字，例如 google、youtube、quizizz。</p>
+  <section class="card">
+    <div class="step">2</div>
+    <h2>這一刻要學生做什麼？</h2>
+    <p class="hint">不是設定「模式」，而是直接選這段教學的操作邊界。</p>
 
+    <div class="intentGrid">
+      <button class="intent active" data-intent="free">
+        <b>自主操作</b>
+        <span>不限制網站與 App</span>
+      </button>
+      <button class="intent" data-intent="allow">
+        <b>只用指定學習資源</b>
+        <span>離開指定資源時提醒學生返回</span>
+      </button>
+      <button class="intent" data-intent="block">
+        <b>暫時不要用某些資源</b>
+        <span>指定網站或 App 暫時不可用</span>
+      </button>
+    </div>
+
+    <div id="resourcePanel" class="resourcePanel hidden">
       <div class="rulegrid">
-        <div>
-          <label>網站規則
-            <select id="site_mode">
-              <option value="off">網站不限制</option>
-              <option value="allowlist">只允許清單內網站</option>
-              <option value="blocklist">只封鎖清單內網站</option>
-            </select>
-          </label>
-          <label>網址關鍵字 <span>一行一個；也可直接貼網址</span>
-            <textarea id="site_list" rows="4" placeholder="例如：google&#10;youtube&#10;quizizz"></textarea>
-          </label>
-        </div>
-
-        <div>
-          <label>App 規則
-            <select id="app_mode">
-              <option value="off">App 不限制</option>
-              <option value="allowlist">只允許清單內 App</option>
-              <option value="blocklist">只封鎖清單內 App</option>
-            </select>
-          </label>
-          <label>App 清單 <span>一行一個名稱</span>
-            <textarea id="app_list" rows="4" placeholder="例如：Google Chrome&#10;Messages"></textarea>
-          </label>
-        </div>
+        <label>網站／服務
+          <span>直接打你平常會說的名稱，或貼網址；不用寫網域規則。</span>
+          <textarea id="site_list" rows="4" placeholder="例如：Google&#10;YouTube&#10;https://quizizz.com"></textarea>
+        </label>
+        <label>App
+          <span>輸入學生會看到的 App 名稱。</span>
+          <textarea id="app_list" rows="4" placeholder="例如：Google Chrome&#10;Keynote"></textarea>
+        </label>
       </div>
-
-      <div id="effect" class="effect"></div>
-      <button id="apply" class="primary">套用到全班</button>
-      <div id="applymsg" class="result"></div>
+      <p class="explain">ACOS 判斷的是學生「目前正在看的前景網站／App」，不是背景 CDN、API 或登入服務，因此老師不需要維護技術網域清單。</p>
     </div>
+
+    <div id="summary" class="summary">全班：網站與 App 自主操作。</div>
+    <button id="apply" class="primary">套用到全班</button>
+    <div id="applymsg" class="result"></div>
   </section>
 
-  <section class="card control">
-    <div class="content">
-      <h2>3. 上課中</h2>
-      <p id="controlhint" class="hint">目前控制對象：全班。</p>
-      <button id="focus" class="focus">請全班看老師</button>
-      <p class="small">再按一次，學生就回到原本的網站、App 或文件繼續操作。</p>
-      <button id="restore" class="restore">結束課堂／解除全班限制</button>
-    </div>
+  <section class="card intervention">
+    <div class="step">3</div>
+    <h2>上課中需要介入時</h2>
+    <p id="controlhint" class="hint">目前控制對象：全班。</p>
+    <button id="focus" class="focus">請全班看老師</button>
+    <p class="small">再按一次就解除，學生回到原本的網站、App 或文件繼續操作。</p>
+    <button id="restore" class="restore">結束課堂／解除全班限制</button>
   </section>
 
   <details class="card advanced">
     <summary>測試與進階設定</summary>
-    <label class="check">
-      <input type="checkbox" id="teachertest">
-      允許這台教師機也接受學生控制（只有測試時才開）
-    </label>
-    <p class="warning">正式上課請保持關閉。關閉後教師機會立即解除 ACOS 控制。</p>
+    <label class="check"><input type="checkbox" id="teachertest"> 允許這台教師機也接受學生控制（只有測試時才開）</label>
+    <p class="warning">正式上課請保持關閉。</p>
   </details>
 </main>
-
 <script src="/static/app.js"></script>
 </body>
 </html>
